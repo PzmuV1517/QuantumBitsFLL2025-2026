@@ -1,0 +1,104 @@
+STRATUM STYLE GUIDE
+
+THEME: Minimal Depth
+Inspired by Nothing’s aesthetic — sleek, monochromatic, and functional minimalism with bright red accents.
+
+----------------------------------------
+COLOR PALETTE
+----------------------------------------
+Primary Background: #111111
+Secondary Background: #1A1A1A
+Accent / Primary Action: #FF2A2A
+Text Primary: #F5F5F5
+Text Secondary: #9A9A9A
+Dividers / Borders: #2A2A2A
+
+----------------------------------------
+TYPOGRAPHY
+----------------------------------------
+Primary Font: Inter
+Secondary Font (optional): Satoshi
+
+Weights:
+Light (300)
+Regular (400)
+SemiBold (600)
+Bold (700)
+
+Letter Spacing: 0.5px–1px
+
+Text Sizes:
+Header 1: 32px
+Header 2: 24px
+Header 3: 18px
+Body: 14–16px
+Small / Label: 12px
+
+----------------------------------------
+LAYOUT & SPACING
+----------------------------------------
+Grid: 8px spacing rule
+Padding: 16px (cards), 24px (pages)
+Corner Radius: 16px
+Shadow: 0px 4px 20px rgba(0,0,0,0.4)
+
+----------------------------------------
+UI COMPONENTS
+----------------------------------------
+Buttons:
+Primary Button
+- Background: #FF2A2A
+- Text: #F5F5F5
+- Hover: #E01E1E
+- Active: glow 0 0 10px rgba(255,42,42,0.4)
+
+Secondary Button
+- Transparent background
+- Border: 1px solid #FF2A2A
+- Text: #FF2A2A
+- Hover: background rgba(255,42,42,0.1)
+
+Cards / Panels:
+- Background: #1A1A1A
+- Border: 1px solid #2A2A2A
+- Hover: subtle red glow
+
+Inputs / Fields:
+- Background: transparent or #1A1A1A
+- Border: 1px solid #2A2A2A
+- Focus Border: #FF2A2A
+- Placeholder: #7A7A7A
+- Caret: #FF2A2A
+
+Icons:
+- Line icons, 1.5–2px stroke
+- Colors: white or red for active
+
+----------------------------------------
+VISUAL EFFECTS
+----------------------------------------
+Transparency: backdrop-filter blur(12px)
+Motion:
+- Duration: 200–300ms
+- Easing: ease-out
+- Hover: slight rise or glow
+Lighting: subtle red glows for activity states
+
+----------------------------------------
+BRAND & IDENTITY
+----------------------------------------
+Logo: Thin geometric text “STRATUM” with a red underline or dot symbolizing a layer
+Tone: Precise, calm, intelligent
+Example Copy:
+- Begin New Expedition
+- Export Layer Data
+- Sync Notes to Stratum Cloud
+
+----------------------------------------
+DESIGN MOOD SUMMARY
+----------------------------------------
+Mood: Minimal, futuristic, functional
+Shape Language: Rounded rectangles, clean lines
+Color Feel: Dark monochrome + bright red accent
+Texture: Transparent, layered depth
+Vibe: Calm precision meets digital archaeology

@@ -1,0 +1,15 @@
+STRATUM is a digital notes platform designed to help archeologists:
+
+1. Plan expeditions
+2. Take notes and logs durring an expedition
+3. Export the data after an expedition
+
+
+THE PROBLEM WE ARE SOLVING:
+
+Archeologists take notes on paper, there is no standardization and online databases and tools have no synergy
+
+
+SOLUTION:
+
+Make a digital suite of tools designed to streamline the note taking process and collaboration

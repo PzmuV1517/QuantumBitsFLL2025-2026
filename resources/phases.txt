@@ -1,0 +1,67 @@
+APP NAME: Stratum
+
+“Stratum” (plural “strata”) is a Latin word meaning layer.
+
+In archaeology and geology, it refers to a layer of material or sediment that has accumulated over time,
+for example, soil, ash, or rock. Each stratum represents a distinct period in history.
+
+
+
+PHASE 1 // Foundations
+
+Focus: core system + team structure
+	1.	Authentication system (accounts, login, permissions, using firebase).
+	2.	Create a Project (each project = 1 archaeological site).
+	3.	Collaboration (invite members, assign roles: Leader, Researcher, Guest, etc).
+	4.	Basic Notes system (text + simple photo upload per user).
+    5.  data syncing between local and cloud (users will have downloaded a copy of the databse and it will be available offline if there is no internet connection; once connected back to internet conflicts will be forced to be resolved by overwriting the cloud save or local save, this happends per file or note or document etc)
+
+⸻
+
+PHASE 2 // Planning & Site Setup
+
+Focus: organizing sites, artifacts, tasks
+	1.	Site Creation (site as in archeological site); sites will be "projects" under wich planning and notes and etc etc will be stored 
+	•	Add site name, GPS boundaries (manual points on map or perimeter trace).
+	•	Metadata: date conceived, expected dismantle date, active archaeologists.
+	•	Role hierarchy for site (who edits/reads/posts).
+	2.	Planning Tab
+	•	Create & assign tasks.
+	•	Upload schematics/photos.
+	•	Write and share notes (option for voice notes).
+	•	Calendar: plan dates, set reminders, link notes/tasks to dates.
+	3.	Artifact Database (basic)
+	•	Add artifact: name, description, measurements, photos, discovery date, tags, categories.
+	•	Link artifact to site.
+	•	QR code generation for each artifact (print & stick for rapid access).
+
+⸻
+
+PHASE 3 // Expedition & Data Capture
+
+Focus: deeper data logging + AI integration
+	1.	Artifact Database (advanced)
+	•	Support LiDAR photo uploads.
+	•	Optional mobile LiDAR scanning integration (where device supports it).
+	•	Attach multiple photos, 3D scans.
+	2.	AI Summaries
+	•	AI generates concise + detailed summaries of:
+	•	Artifacts (use, context, where found).
+	•	Sites (condition, findings, progress).
+	•	AI suggestions for best excavation times (weather/conditions).
+	3.	Notes Upgrade
+	•	Rich notes (voice notes, image-embedded notes).
+	•	Private vs shared notes toggling.
+	•	AI-assisted summarization of notes across the project.
+
+⸻
+
+PHASE 4 // Professional Features
+
+Focus: scaling + integrations
+	1.	Cloud / NAS storage options (all data saved in secure cloud; optional self-host on NAS).
+	2.	Advanced collaboration tools (chat within project, file versioning, document history).
+	3.	Mapping & Visualization
+	•	Layered maps of sites, artifacts, excavation zones.
+	•	Tagging artifacts within GPS-based map.
+	•	Export reports (PDF/Word) with AI-generated site/expedition summaries.

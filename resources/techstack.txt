@@ -1,0 +1,15 @@
+Backend : PYTHON
+Database : 
+	- POSTGRES (for data)
+	- MiniIO (for objects AKA files)
+	- Firebase (authentification)
+
+Frontend :
+	- React native with Expo
+
+Libraries for React:
+	- Expo
+	- React Native Maps
+	- react-native-point-cloud
+	- potree-core
+	- react-native-3d-model-view
