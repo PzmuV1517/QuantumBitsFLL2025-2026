@@ -465,7 +465,22 @@ export default function ProjectDetailScreen() {
                           }
                         }}
                       >
-                        <Text style={styles.fileName}>{node.name}</Text>
+                        {(() => {
+                          if (node.type === 'file' && node.name) {
+                            const hasDot = node.name.includes('.') && !node.name.startsWith('.');
+                            if (hasDot) {
+                              const base = node.name.replace(/\.[^.]+$/, '');
+                              const ext = node.name.substring(node.name.lastIndexOf('.') + 1);
+                              return (
+                                <Text style={styles.fileName}>
+                                  {base}
+                                  <Text style={styles.fileExt}> .{ext}</Text>
+                                </Text>
+                              );
+                            }
+                          }
+                          return <Text style={styles.fileName}>{node.name}</Text>;
+                        })()}
                       </TouchableOpacity>
                       {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
                       <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
@@ -550,7 +565,14 @@ export default function ProjectDetailScreen() {
                         )}
                         {!node.is_locked && (
                           <>
-                            <TouchableOpacity onPress={() => { setRenameNode(node); setRenameText(node.name); }}>
+                            <TouchableOpacity onPress={() => { 
+                              setRenameNode(node); 
+                              if (node.type === 'file' && node.name && node.name.includes('.') && !node.name.startsWith('.')) {
+                                setRenameText(node.name.replace(/\.[^.]+$/, '')); // base only
+                              } else {
+                                setRenameText(node.name);
+                              }
+                            }}>
                               <Text style={{ color: '#9A9A9A' }}>Rename</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => setMoveMode({ node })}>
@@ -702,7 +724,12 @@ export default function ProjectDetailScreen() {
                   style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444' }]}
                   onPress={async () => {
                     try {
-                      await fileService.renameNode(renameNode.id, renameText.trim());
+                      let finalName = renameText.trim();
+                      if (renameNode.type === 'file' && renameNode.name && renameNode.name.includes('.') && !renameNode.name.startsWith('.')) {
+                        const ext = renameNode.name.substring(renameNode.name.lastIndexOf('.') + 1);
+                        finalName = `${finalName}.${ext}`;
+                      }
+                      await fileService.renameNode(renameNode.id, finalName);
                       setRenameNode(null);
                       if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
                       else await loadRootFiles();
@@ -867,6 +894,10 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     fontSize: 16,
     letterSpacing: 0.3,
+  },
+  fileExt: {
+    color: '#9A9A9A',
+    fontSize: 14,
   },
   lockBadge: {
     color: '#FF4444',

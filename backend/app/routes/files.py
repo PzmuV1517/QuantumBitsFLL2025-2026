@@ -109,8 +109,21 @@ async def rename_node(
     check_project_permission(node.project_id, current_user, db)
     if node.is_locked:
         raise HTTPException(status_code=400, detail="This node cannot be renamed")
-
-    node.name = payload.name
+    # Preserve extension for file nodes; users can only change base name
+    if node.type == FileNodeType.FILE and node.name:
+        # Split existing name
+        if '.' in node.name and not node.name.startswith('.'):
+            *base_parts, ext = node.name.rsplit('.', 1)
+            old_ext = ext
+        else:
+            old_ext = None
+        # Extract new base (strip any extension user might have typed to avoid changing type)
+        new_base = payload.name
+        if '.' in new_base and not new_base.startswith('.'):
+            new_base = new_base.rsplit('.', 1)[0]
+        node.name = f"{new_base}.{old_ext}" if old_ext else new_base
+    else:
+        node.name = payload.name
     node.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(node)
