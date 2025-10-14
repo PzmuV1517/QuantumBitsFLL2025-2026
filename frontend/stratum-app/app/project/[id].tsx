@@ -18,6 +18,7 @@ import { noteService } from '../../src/services/noteService';
 import { fileService } from '../../src/services/fileService';
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
+import { Image } from 'react-native';
 import { useRef } from 'react';
 
 interface Project {
@@ -70,6 +71,7 @@ export default function ProjectDetailScreen() {
   const [downloadProgress, setDownloadProgress] = useState<number>(0); // 0..1
   const [downloadStatus, setDownloadStatus] = useState<'in-progress' | 'finalizing' | null>(null);
   const DOWNLOAD_FINALIZE_HOLD_MS = 1500; // keep 100% bar visible a bit longer so user sees completion
+  // Removed inline preview (now separate screen)
 
   useEffect(() => {
     loadProjectData();
@@ -457,11 +459,16 @@ export default function ProjectDetailScreen() {
                       <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
                       <TouchableOpacity
                         style={{ flex: 1 }}
-                        disabled={node.type === 'file'}
-                        onPress={() => {
+                        disabled={false}
+                        onPress={async () => {
                           if (node.type === 'folder') return openFolder(node);
                           if (node.type === 'note') {
                             router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
+                            return;
+                          }
+                          const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
+                          if (isImage) {
+                            router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
                           }
                         }}
                       >
@@ -773,6 +780,8 @@ export default function ProjectDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Image preview handled by dedicated screen now */}
     </View>
   );
 }
@@ -915,6 +924,106 @@ const styles = StyleSheet.create({
   progressBarFill: {
     height: '100%',
     backgroundColor: '#FF2A2A',
+  },
+  previewBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  previewCard: {
+    backgroundColor: '#1E1E1A',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+    width: '100%',
+    maxHeight: '85%',
+  },
+  previewTitle: {
+    color: '#F5F5F5',
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+    marginRight: 12,
+  },
+  previewImageContainer: {
+    flex: 1,
+    minHeight: 300,
+    maxHeight: 600,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  previewImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sheetRoot: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+  },
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sheetContainer: {
+    backgroundColor: '#1E1E1A',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 12,
+    paddingHorizontal: 20,
+    paddingBottom: 28,
+    borderTopWidth: 1,
+    borderColor: '#333',
+    maxHeight: '80%',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: '#444',
+    marginBottom: 12,
+  },
+  sheetHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sheetAction: {
+    color: '#9A9A9A',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sheetActionClose: {
+    color: '#FF4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sheetImageWrapper: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sheetImage: {
+    width: '100%',
+    height: '100%',
   },
   modalBackdrop: {
     flex: 1,
