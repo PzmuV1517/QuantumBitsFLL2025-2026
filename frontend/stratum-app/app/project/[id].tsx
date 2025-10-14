@@ -8,11 +8,15 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  TextInput,
+  Modal,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect, useGlobalSearchParams } from 'expo-router';
 import { Stack } from 'expo-router';
 import { projectService } from '../../src/services/projectService';
 import { noteService } from '../../src/services/noteService';
+import { fileService } from '../../src/services/fileService';
+import * as DocumentPicker from 'expo-document-picker';
 
 interface Project {
   id: string;
@@ -43,16 +47,35 @@ interface Member {
 
 export default function ProjectDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const globalParams = useGlobalSearchParams<{ tab?: string }>();
   const router = useRouter();
   const [project, setProject] = useState<Project | null>(null);
   const [notes, setNotes] = useState<Note[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'notes' | 'members'>('notes');
+  const [activeTab, setActiveTab] = useState<'notes' | 'members' | 'files'>('notes');
+  const [fileNodes, setFileNodes] = useState<any[]>([]);
+  const [currentFolder, setCurrentFolder] = useState<{ id: string | null; name: string } | null>(null);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [renameNode, setRenameNode] = useState<any | null>(null);
+  const [renameText, setRenameText] = useState('');
+  const [moveMode, setMoveMode] = useState<{ node: any | null } | null>(null);
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [deleteNodeTarget, setDeleteNodeTarget] = useState<any | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadProjectData();
   }, [id]);
+
+  // Sync tab with route param when available
+  useEffect(() => {
+    const tabParam = (globalParams?.tab as string) || '';
+    if (tabParam === 'notes' || tabParam === 'files' || tabParam === 'members') {
+      setActiveTab(tabParam);
+    }
+  }, [globalParams?.tab]);
 
   // Reload notes when screen comes back into focus
   useFocusEffect(
@@ -91,6 +114,58 @@ export default function ProjectDetailScreen() {
       setLoading(false);
     }
   };
+
+  const loadRootFiles = async () => {
+    if (!id) return;
+    try {
+      setFileLoading(true);
+      const nodes = await fileService.listRoot(id as string);
+      setFileNodes(nodes);
+      setCurrentFolder({ id: null as any, name: 'Root' });
+    } catch (e) {
+      console.error('Failed to load files:', e);
+    } finally {
+      setFileLoading(false);
+    }
+  };
+
+  const openFolder = async (node: any) => {
+    try {
+      setFileLoading(true);
+      const children = await fileService.listChildren(node.id);
+      setFileNodes(children);
+      setCurrentFolder({ id: node.id, name: node.name });
+    } catch (e) {
+      console.error('Failed to open folder:', e);
+    } finally {
+      setFileLoading(false);
+    }
+  };
+
+  const uploadIntoCurrent = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+      if (res.canceled) return;
+      const asset = res.assets[0];
+      const file: any = {
+        uri: asset.uri,
+        name: asset.name || 'upload',
+        type: asset.mimeType || 'application/octet-stream',
+      };
+  const parentId = (currentFolder && currentFolder.id) ? currentFolder.id : undefined;
+  await fileService.uploadFile(id as string, file, parentId as any);
+      if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
+      else await loadRootFiles();
+    } catch (e) {
+      Alert.alert('Upload failed', 'Could not upload file');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'files') {
+      loadRootFiles();
+    }
+  }, [activeTab, id]);
 
   const handleCreateNote = () => {
     router.push({
@@ -248,6 +323,14 @@ export default function ProjectDetailScreen() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.tab, activeTab === 'files' && styles.activeTab]}
+            onPress={() => setActiveTab('files')}
+          >
+            <Text style={[styles.tabText, activeTab === 'files' && styles.activeTabText]}>
+              Files
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.tab, activeTab === 'members' && styles.activeTab]}
             onPress={() => setActiveTab('members')}
           >
@@ -285,6 +368,75 @@ export default function ProjectDetailScreen() {
                 </View>
               )}
             </View>
+          ) : activeTab === 'files' ? (
+            <View>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Files</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => { setNewFolderName(''); setShowNewFolderModal(true); }}
+                  >
+                    <Text style={styles.addButtonText}>+ Folder</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.addButton} onPress={uploadIntoCurrent}>
+                    <Text style={styles.addButtonText}>+ Upload</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {fileLoading ? (
+                <ActivityIndicator color="#FF2A2A" />
+              ) : fileNodes.length > 0 ? (
+                <View>
+                  {/* Breadcrumb */}
+                  <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center' }}>
+                    {currentFolder?.id ? (
+                      <TouchableOpacity onPress={loadRootFiles}>
+                        <Text style={{ color: '#FF2A2A', marginRight: 6 }}>Root</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={{ color: '#9A9A9A', marginRight: 6 }}>Root</Text>
+                    )}
+                    {currentFolder?.id && (
+                      <Text style={{ color: '#9A9A9A' }}>/ {currentFolder.name}</Text>
+                    )}
+                  </View>
+                  {fileNodes.map((node) => (
+                    <TouchableOpacity
+                      key={node.id}
+                      style={styles.fileRow}
+                      onPress={() => {
+                        if (node.type === 'folder') return openFolder(node);
+                        // Opening files/notes will be supported later
+                      }}
+                    >
+                      <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
+                      <Text style={styles.fileName}>{node.name}</Text>
+                      {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
+                      {!node.is_locked && (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity onPress={() => { setRenameNode(node); setRenameText(node.name); }}>
+                            <Text style={{ color: '#9A9A9A' }}>Rename</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setMoveMode({ node })}>
+                            <Text style={{ color: '#9A9A9A' }}>Move</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
+                            <Text style={{ color: '#FF4444' }}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No files</Text>
+                  <Text style={styles.emptyStateSubtext}>Create a folder or upload files</Text>
+                </View>
+              )}
+            </View>
           ) : (
             <View>
               <View style={styles.sectionHeader}>
@@ -314,6 +466,151 @@ export default function ProjectDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* New Folder Modal */}
+      <Modal visible={showNewFolderModal} transparent animationType="fade" onRequestClose={() => setShowNewFolderModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>New Folder</Text>
+            <Text style={styles.modalText}>Enter a name for the new folder</Text>
+            <TextInput
+              style={styles.confirmInput}
+              placeholder="Folder name"
+              placeholderTextColor="#666"
+              value={newFolderName}
+              onChangeText={setNewFolderName}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButton} onPress={() => setShowNewFolderModal(false)}>
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: '#2A2A2A', borderWidth: 1, borderColor: '#FF2A2A' }]}
+                onPress={async () => {
+                  const name = newFolderName.trim();
+                  if (!name) return;
+                  try {
+                    const parentId = (currentFolder && currentFolder.id) ? currentFolder.id : undefined;
+                    await fileService.createFolder(id as string, name, parentId as any);
+                    setShowNewFolderModal(false);
+                    if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
+                    else await loadRootFiles();
+                  } catch (e) {
+                    Alert.alert('Error', 'Failed to create folder');
+                  }
+                }}
+              >
+                <Text style={styles.modalButtonText}>Create</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal visible={!!deleteNodeTarget} transparent animationType="fade" onRequestClose={() => setDeleteNodeTarget(null)}>
+        {deleteNodeTarget && (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Delete “{deleteNodeTarget.name}”?</Text>
+              <Text style={styles.modalText}>
+                This will permanently delete {deleteNodeTarget.type === 'folder' ? 'this folder and all of its contents' : 'this item' }. This action cannot be undone.
+              </Text>
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalButton} onPress={() => setDeleteNodeTarget(null)} disabled={isDeleting}>
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444', opacity: isDeleting ? 0.7 : 1 }]}
+                  disabled={isDeleting}
+                  onPress={async () => {
+                    try {
+                      setIsDeleting(true);
+                      await fileService.deleteNode(deleteNodeTarget.id);
+                      setDeleteNodeTarget(null);
+                      if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
+                      else await loadRootFiles();
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to delete');
+                    } finally {
+                      setIsDeleting(false);
+                    }
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: '#FF4444' }]}>{isDeleting ? 'Deleting…' : 'Delete'}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+
+      {/* Rename Modal */}
+      <Modal visible={!!renameNode} transparent animationType="fade" onRequestClose={() => setRenameNode(null)}>
+        {renameNode && (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Rename</Text>
+              <Text style={styles.modalText}>Enter a new name for "{renameNode?.name || ''}"</Text>
+              <TextInput
+                style={styles.confirmInput}
+                placeholder="New name"
+                placeholderTextColor="#666"
+                value={renameText}
+                onChangeText={setRenameText}
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity style={styles.modalButton} onPress={() => setRenameNode(null)}>
+                  <Text style={styles.modalButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444' }]}
+                  onPress={async () => {
+                    try {
+                      await fileService.renameNode(renameNode.id, renameText.trim());
+                      setRenameNode(null);
+                      if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
+                      else await loadRootFiles();
+                    } catch (e) {
+                      Alert.alert('Error', 'Failed to rename');
+                    }
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, { color: '#FF4444' }]}>Rename</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        )}
+      </Modal>
+
+      {/* Move Mode Banner */}
+      {moveMode?.node && (
+        <View style={styles.moveBanner}>
+          <Text style={{ color: '#F5F5F5', flex: 1 }}>
+            Select destination for "{moveMode.node.name}" then tap Move Here
+          </Text>
+          <TouchableOpacity
+            style={[styles.addButton, { marginRight: 8 }]}
+            onPress={async () => {
+              try {
+                const destParentId = currentFolder?.id || null;
+                await fileService.moveNode(moveMode.node.id, (destParentId || undefined) as any);
+                setMoveMode(null);
+                if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
+                else await loadRootFiles();
+              } catch (e) {
+                Alert.alert('Error', 'Failed to move');
+              }
+            }}
+          >
+            <Text style={styles.addButtonText}>Move Here</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.addButton, { backgroundColor: '#2A2A2A' }]} onPress={() => setMoveMode(null)}>
+            <Text style={styles.addButtonText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -414,6 +711,97 @@ const styles = StyleSheet.create({
   },
   tabContent: {
     paddingHorizontal: 24,
+  },
+  fileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  fileIcon: {
+    fontSize: 18,
+    marginRight: 10,
+    color: '#F5F5F5',
+  },
+  fileName: {
+    flex: 1,
+    color: '#F5F5F5',
+    fontSize: 16,
+    letterSpacing: 0.3,
+  },
+  lockBadge: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#1E1E1A',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  confirmInput: {
+    backgroundColor: '#121212',
+    color: '#F5F5F5',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+    marginBottom: 16,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+  },
+  modalButtonText: {
+    color: '#F5F5F5',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  moveBanner: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   sectionHeader: {
     flexDirection: 'row',

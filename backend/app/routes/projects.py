@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.dependencies import get_current_user, check_project_permission
-from app.models import User, Project, project_members
+from app.models import User, Project, project_members, FileNode, FileNodeType
 from app.schemas import (
     ProjectCreate, ProjectResponse, ProjectWithMembers,
     ProjectMemberAdd, ProjectMemberUpdate, UserResponse
@@ -32,6 +32,17 @@ async def create_project(
     
     # Add the owner as a member with leader role
     project.members.append(current_user)
+    db.commit()
+
+    # Create default Files root folders: Notes (locked)
+    notes_folder = FileNode(
+        project_id=project.id,
+        parent_id=None,
+        name="Notes",
+        type=FileNodeType.FOLDER,
+        is_locked=True,
+    )
+    db.add(notes_folder)
     db.commit()
     
     return project

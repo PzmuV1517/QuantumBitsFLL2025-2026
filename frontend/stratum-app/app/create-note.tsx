@@ -33,9 +33,8 @@ export default function CreateNoteScreen() {
         content: content.trim(),
         project_id: projectId as string,
       });
-      Alert.alert('Success', 'Note created successfully', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      // Redirect to the project's Notes tab
+      router.replace({ pathname: '/project/[id]', params: { id: String(projectId), tab: 'notes' } });
     } catch (error) {
       console.error('Failed to create note:', error);
       Alert.alert('Error', 'Failed to create note');

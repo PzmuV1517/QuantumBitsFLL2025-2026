@@ -1,15 +1,26 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
+from sqlalchemy import text
 from app.database import engine, Base
 from app.firebase_config import initialize_firebase
-from app.routes import auth, projects, notes
+from app.routes import auth, projects, notes, files
 
 # Initialize Firebase
 initialize_firebase()
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
+
+# Lightweight migrations for schema updates (no Alembic yet)
+with engine.connect() as conn:
+    try:
+        # Add storage_path column to file_nodes if it's missing
+        conn.execute(text("ALTER TABLE file_nodes ADD COLUMN IF NOT EXISTS storage_path VARCHAR"))
+        conn.commit()
+    except Exception as e:
+        # Don't crash app if migration fails; it will log and continue
+        print(f"Schema migration warning: {e}")
 
 # Create FastAPI app
 app = FastAPI(
@@ -31,6 +42,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(projects.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
+app.include_router(files.router, prefix="/api")
 
 
 @app.get("/")

@@ -145,3 +145,39 @@ class SyncRequest(BaseModel):
 class TokenData(BaseModel):
     firebase_uid: str
     email: str
+
+
+# File System Schemas
+class FileNodeType(str, Enum):
+    folder = "folder"
+    file = "file"
+    note = "note"
+
+
+class FileNodeBase(BaseModel):
+    id: str
+    project_id: str
+    parent_id: Optional[str] = None
+    name: str
+    type: FileNodeType
+    mime_type: Optional[str] = None
+    size: Optional[str] = None
+    is_locked: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FileNodeCreateFolder(BaseModel):
+    name: str
+    parent_id: Optional[str] = None
+
+
+class FileNodeRenameRequest(BaseModel):
+    name: str
+
+
+class FileNodeMoveRequest(BaseModel):
+    new_parent_id: Optional[str] = None

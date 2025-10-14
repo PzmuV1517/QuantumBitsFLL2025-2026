@@ -7,6 +7,8 @@ import {
   Alert,
   ActivityIndicator,
   TouchableOpacity,
+  Modal,
+  TextInput,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { Stack } from 'expo-router';
@@ -27,6 +29,8 @@ export default function NoteDetailScreen() {
   const router = useRouter();
   const [note, setNote] = useState<Note | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadNote();
@@ -64,25 +68,25 @@ export default function NoteDetailScreen() {
   };
 
   const handleDelete = () => {
-    Alert.alert(
-      'Delete Note',
-      'Are you sure you want to delete this note? This action cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: confirmDelete },
-      ]
-    );
+    setShowDeleteModal(true);
   };
 
   const confirmDelete = async () => {
     try {
+      setIsDeleting(true);
       await noteService.deleteNote(noteId as string);
-      Alert.alert('Success', 'Note deleted successfully', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      setShowDeleteModal(false);
+      // Navigate back to the project detail page reliably
+      if (projectId) {
+        router.replace({ pathname: '/project/[id]', params: { id: String(projectId) } });
+      } else {
+        router.back();
+      }
     } catch (error) {
       console.error('Error deleting note:', error);
       Alert.alert('Error', 'Failed to delete note');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -181,6 +185,35 @@ export default function NoteDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Delete confirmation modal */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete note?</Text>
+            <Text style={styles.modalText}>
+              This will permanently delete this note and its attachments. This action cannot be undone.
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButton} onPress={() => setShowDeleteModal(false)} disabled={isDeleting}>
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444', opacity: isDeleting ? 0.7 : 1 }]}
+                onPress={confirmDelete}
+                disabled={isDeleting}
+              >
+                <Text style={[styles.modalButtonText, { color: '#FF4444' }]}>{isDeleting ? 'Deleting…' : 'Delete'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -276,5 +309,48 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     lineHeight: 24,
     letterSpacing: 0.3,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+  },
+  modalButtonText: {
+    color: '#F5F5F5',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

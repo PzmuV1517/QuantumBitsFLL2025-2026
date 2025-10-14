@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.database import get_db
 from app.dependencies import get_current_user, check_project_permission
-from app.models import User, Note, NoteAttachment
+from app.models import User, Note, NoteAttachment, FileNode, FileNodeType, NoteFileLink
 from app.schemas import NoteCreate, NoteUpdate, NoteResponse
 from app.minio_client import minio_client
 from datetime import datetime
@@ -31,6 +31,40 @@ async def create_note(
     db.add(note)
     db.commit()
     db.refresh(note)
+    
+    # Ensure Notes folder exists and create a locked file node representing this note under it
+    notes_folder = db.query(FileNode).filter(
+        FileNode.project_id == note.project_id,
+        FileNode.parent_id == None,
+        FileNode.name == "Notes",
+        FileNode.type == FileNodeType.FOLDER
+    ).first()
+    if not notes_folder:
+        notes_folder = FileNode(
+            project_id=note.project_id,
+            parent_id=None,
+            name="Notes",
+            type=FileNodeType.FOLDER,
+            is_locked=True,
+        )
+        db.add(notes_folder)
+        db.commit()
+        db.refresh(notes_folder)
+
+    note_node = FileNode(
+        project_id=note.project_id,
+        parent_id=notes_folder.id,
+        name=note.title,
+        type=FileNodeType.NOTE,
+        is_locked=True,
+    )
+    db.add(note_node)
+    db.commit()
+    db.refresh(note_node)
+
+    link = NoteFileLink(note_id=note.id, file_node_id=note_node.id)
+    db.add(link)
+    db.commit()
     
     return note
 
@@ -99,6 +133,10 @@ async def update_note(
     # Update fields
     if note_data.title is not None:
         note.title = note_data.title
+        # Reflect title change in file node, if exists
+        if note.file_link and note.file_link.file_node:
+            note.file_link.file_node.name = note.title
+            note.file_link.file_node.updated_at = datetime.utcnow()
     if note_data.content is not None:
         note.content = note_data.content
     
@@ -134,6 +172,10 @@ async def delete_note(
     # Delete attachments from MinIO
     for attachment in note.attachments:
         await minio_client.delete_file(attachment.file_path)
+    
+    # Delete associated file node if present
+    if note.file_link and note.file_link.file_node:
+        db.delete(note.file_link.file_node)
     
     db.delete(note)
     db.commit()
