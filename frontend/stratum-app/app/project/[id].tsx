@@ -18,6 +18,7 @@ import { noteService } from '../../src/services/noteService';
 import { fileService } from '../../src/services/fileService';
 import * as DocumentPicker from 'expo-document-picker';
 import { Platform } from 'react-native';
+import { useRef } from 'react';
 
 interface Project {
   id: string;
@@ -65,6 +66,10 @@ export default function ProjectDetailScreen() {
   const [newFolderName, setNewFolderName] = useState('');
   const [deleteNodeTarget, setDeleteNodeTarget] = useState<any | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [downloadingNodeId, setDownloadingNodeId] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<number>(0); // 0..1
+  const [downloadStatus, setDownloadStatus] = useState<'in-progress' | 'finalizing' | null>(null);
+  const DOWNLOAD_FINALIZE_HOLD_MS = 1500; // keep 100% bar visible a bit longer so user sees completion
 
   useEffect(() => {
     loadProjectData();
@@ -445,31 +450,119 @@ export default function ProjectDetailScreen() {
                     )}
                   </View>
                   {fileNodes.map((node) => (
-                    <TouchableOpacity
+                    <View
                       key={node.id}
                       style={styles.fileRow}
-                      onPress={() => {
-                        if (node.type === 'folder') return openFolder(node);
-                        // Opening files/notes will be supported later
-                      }}
                     >
                       <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
-                      <Text style={styles.fileName}>{node.name}</Text>
+                      <TouchableOpacity
+                        style={{ flex: 1 }}
+                        disabled={node.type === 'file'}
+                        onPress={() => {
+                          if (node.type === 'folder') return openFolder(node);
+                          if (node.type === 'note') {
+                            router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
+                          }
+                        }}
+                      >
+                        <Text style={styles.fileName}>{node.name}</Text>
+                      </TouchableOpacity>
                       {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
-                      {!node.is_locked && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity onPress={() => { setRenameNode(node); setRenameText(node.name); }}>
-                            <Text style={{ color: '#9A9A9A' }}>Rename</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setMoveMode({ node })}>
-                            <Text style={{ color: '#9A9A9A' }}>Move</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
-                            <Text style={{ color: '#FF4444' }}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
+                        {node.type === 'file' && (
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <TouchableOpacity
+                              disabled={downloadingNodeId === node.id}
+                              onPress={async () => {
+                                try {
+                                  setDownloadingNodeId(node.id);
+                                  setDownloadProgress(0);
+                                  setDownloadStatus('in-progress');
+                                  if (Platform.OS === 'web') {
+                                    // Try streaming for accurate progress
+                                    try {
+                                      const token = await (await import('../../src/services/api')).default.interceptors?.request ? await (async () => { return await (await import('@react-native-async-storage/async-storage')).default.getItem('authToken'); })() : null;
+                                      const streamResult = await fileService.downloadFileStream(node.id, token, (loaded: number, total: number) => {
+                                        if (total) setDownloadProgress(loaded / total);
+                                      }) as any; // streaming path returns { blob, contentLength }
+                                      // Ensure progress reflects completion
+                                      setDownloadProgress(1);
+                                      const url = window.URL.createObjectURL(streamResult.blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = node.name || 'download';
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      a.remove();
+                                      window.URL.revokeObjectURL(url);
+                                    } catch (e) {
+                                      console.warn('Streaming failed, falling back to axios method', e);
+                                      const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                        if (total) setDownloadProgress(loaded / total);
+                                      });
+                                      const blob = res.data;
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = node.name || 'download';
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      a.remove();
+                                      window.URL.revokeObjectURL(url);
+                                    }
+                                  } else {
+                                    const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                      if (total) setDownloadProgress(loaded / total);
+                                    });
+                                    const blob = res.data;
+                                    // Placeholder mobile handling
+                                    Alert.alert('Download', 'File downloaded (placeholder).');
+                                  }
+                                } catch (err) {
+                                  console.error('Download failed', err);
+                                  Alert.alert('Error', 'Failed to download file');
+                                } finally {
+                                  // Move to finalizing state so bar remains briefly even after we have blob
+                                  setDownloadProgress(1);
+                                  setDownloadStatus('finalizing');
+                                  setTimeout(() => {
+                                    setDownloadingNodeId(null);
+                                    setDownloadProgress(0);
+                                    setDownloadStatus(null);
+                                  }, DOWNLOAD_FINALIZE_HOLD_MS);
+                                }
+                              }}
+                            >
+                              <Text style={{ color: '#9A9A9A' }}>
+                                {downloadingNodeId === node.id
+                                  ? downloadStatus === 'finalizing'
+                                    ? 'Finalizing…'
+                                    : `Downloading… ${downloadProgress > 0 ? Math.round(downloadProgress * 100) + '%' : ''}`
+                                  : 'Download'}
+                              </Text>
+                            </TouchableOpacity>
+                            {downloadingNodeId === node.id && (
+                              <View style={styles.progressBarContainer}>
+                                <View style={[styles.progressBarFill, { width: `${Math.round(downloadProgress * 100)}%` }]} />
+                              </View>
+                            )}
+                          </View>
+                        )}
+                        {!node.is_locked && (
+                          <>
+                            <TouchableOpacity onPress={() => { setRenameNode(node); setRenameText(node.name); }}>
+                              <Text style={{ color: '#9A9A9A' }}>Rename</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setMoveMode({ node })}>
+                              <Text style={{ color: '#9A9A9A' }}>Move</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
+                              <Text style={{ color: '#FF4444' }}>Delete</Text>
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    </View>
                   ))}
                 </View>
               ) : (
@@ -779,6 +872,18 @@ const styles = StyleSheet.create({
     color: '#FF4444',
     fontSize: 12,
     fontWeight: '700',
+  },
+  progressBarContainer: {
+    marginTop: 4,
+    width: 120,
+    height: 6,
+    backgroundColor: '#2A2A2A',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#FF2A2A',
   },
   modalBackdrop: {
     flex: 1,

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
@@ -197,3 +198,48 @@ async def upload_file(
     db.commit()
     db.refresh(node)
     return node
+
+
+@router.get("/{node_id}/download")
+async def download_file(
+    node_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download a file node's content.
+
+    Returns a streaming response with appropriate Content-Type and Content-Disposition.
+    Notes and folders are not downloadable.
+    """
+    node = db.query(FileNode).filter(FileNode.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.type != FileNodeType.FILE:
+        raise HTTPException(status_code=400, detail="Only file nodes can be downloaded")
+    check_project_permission(node.project_id, current_user, db)
+    if not node.storage_path:
+        raise HTTPException(status_code=404, detail="Stored object missing")
+
+    # Stream file from MinIO to avoid loading entire content in memory for large files
+    try:
+        # Get object to stream and its stat for size
+        stat = minio_client.client.stat_object(minio_client.bucket_name, node.storage_path)
+        obj = minio_client.client.get_object(minio_client.bucket_name, node.storage_path)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to retrieve object")
+
+    def iterfile():
+        try:
+            for data in obj.stream(32 * 1024):
+                yield data
+        finally:
+            obj.close()
+            obj.release_conn()
+
+    filename = node.name or "download"
+    media_type = node.mime_type or "application/octet-stream"
+    headers = {
+        "Content-Disposition": f"attachment; filename=\"{filename}\"",
+        "Content-Length": str(getattr(stat, 'size', '') or '')
+    }
+    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)

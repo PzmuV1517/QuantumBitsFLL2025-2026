@@ -26,12 +26,50 @@ export const fileService = {
     await api.delete(`/files/${nodeId}`);
   },
   uploadFile: async (projectId, formData) => {
-    // Override the default 'application/json' Content-Type to let the browser set multipart boundary
-    const res = await api.post(`/files/project/${projectId}/upload`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
+    const res = await api.post(`/files/project/${projectId}/upload`, formData);
+    return res.data;
+  },
+  downloadFile: async (nodeId) => {
+    const res = await api.get(`/files/${nodeId}/download`, {
+      responseType: 'blob',
+    });
+    return res;
+  },
+  downloadFileWithProgress: async (nodeId, onProgress) => {
+    const res = await api.get(`/files/${nodeId}/download`, {
+      responseType: 'blob',
+      onDownloadProgress: (e) => {
+        if (onProgress) {
+          const loaded = e.loaded;
+            // Some browsers supply e.total; if missing attempt to parse from headers after request
+          const total = e.total || 0;
+          onProgress(loaded, total);
+        }
       },
     });
-    return res.data;
+    return res;
+  },
+  downloadFileStream: async (nodeId, token, onProgress) => {
+    if (Platform.OS !== 'web') {
+      // Fallback to axios progress for non-web
+      return fileService.downloadFileWithProgress(nodeId, onProgress);
+    }
+    const url = `${api.defaults.baseURL}/files/${nodeId}/download`;
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const response = await fetch(url, { headers });
+    if (!response.ok) throw new Error('Download failed');
+    const contentLength = parseInt(response.headers.get('Content-Length') || '0', 10) || 0;
+    const reader = response.body.getReader();
+    let received = 0;
+    const chunks = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (onProgress) onProgress(received, contentLength);
+    }
+    const blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'application/octet-stream' });
+    return { blob, contentLength };
   },
 };
