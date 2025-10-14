@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -63,6 +63,15 @@ export default function ProjectDetailScreen() {
     }, [project?.id])
   );
 
+  // Reload project data when screen comes back into focus (after editing)
+  useFocusEffect(
+    React.useCallback(() => {
+      if (id) {
+        loadProjectData();
+      }
+    }, [id])
+  );
+
   const loadProjectData = async () => {
     try {
       setLoading(true);
@@ -101,6 +110,20 @@ export default function ProjectDetailScreen() {
     // For now, show an alert since we haven't created the member management screen yet
     Alert.alert('Coming Soon', 'Member management screen will be available soon');
   };
+
+  const handleProjectSettings = () => {
+    // Directly navigate to the Edit Project screen
+    if (project?.id) {
+      router.push({
+        pathname: '/edit-project',
+        params: { projectId: project.id },
+      });
+    } else {
+      Alert.alert('Please wait', 'Project is still loading.');
+    }
+  };
+
+
 
   const renderNote = ({ item }: { item: Note }) => (
     <TouchableOpacity style={styles.noteCard} onPress={() => handleNotePress(item.id)}>
@@ -171,6 +194,29 @@ export default function ProjectDetailScreen() {
           },
           headerBackTitle: 'Projects',
           headerShown: true,
+          // Always provide a visible back control even after reload/deep link
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.replace('/(tabs)')}
+              style={styles.headerBackButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.headerBackIcon}>‹</Text>
+            </TouchableOpacity>
+          ),
+          headerBackVisible: true,
+          presentation: 'card',
+          headerRight: () => (
+            <TouchableOpacity 
+              onPress={handleProjectSettings}
+              style={styles.settingsButton}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.settingsIcon}>Settings</Text>
+            </TouchableOpacity>
+          ),
         }} 
       />
       
@@ -506,5 +552,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F5F5F5',
     letterSpacing: 0.5,
+  },
+  settingsButton: {
+    padding: 8,
+    marginRight: 8,
+  },
+  settingsIcon: {
+    fontSize: 16,
+    color: '#FF2A2A',
+    fontWeight: '600',
+  },
+  headerBackButton: {
+    padding: 8,
+    marginLeft: 8,
+  },
+  headerBackIcon: {
+    color: '#FF2A2A',
+    fontSize: 22,
+    fontWeight: '700',
+    marginTop: -2,
   },
 });

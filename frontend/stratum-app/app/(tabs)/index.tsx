@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { projectService } from '../../src/services/projectService';
 
 export default function ProjectsScreen() {
@@ -12,6 +12,13 @@ export default function ProjectsScreen() {
   useEffect(() => {
     loadProjects();
   }, []);
+
+  // Reload projects when screen comes back into focus (after creating a project)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProjects();
+    }, [])
+  );
 
   const loadProjects = async () => {
     try {

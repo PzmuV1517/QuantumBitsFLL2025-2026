@@ -21,9 +21,8 @@ export default function CreateProjectModal() {
         name: name.trim(),
         description: description.trim() || null,
       });
-      Alert.alert('Success', 'Project created successfully', [
-        { text: 'OK', onPress: () => router.back() },
-      ]);
+      // Close modal immediately, the projects list will refresh automatically
+      router.back();
     } catch (error) {
       Alert.alert('Error', 'Failed to create project');
     } finally {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { projectService } from '../../src/services/projectService';
 
 export default function ExploreScreen() {
@@ -11,6 +11,13 @@ export default function ExploreScreen() {
   useEffect(() => {
     loadRecentActivity();
   }, []);
+
+  // Reload recent projects when screen comes back into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      loadRecentActivity();
+    }, [])
+  );
 
   const loadRecentActivity = async () => {
     try {
