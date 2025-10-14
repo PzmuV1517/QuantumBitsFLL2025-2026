@@ -1,15 +1,30 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal } from 'react-native';
+import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
+  const router = useRouter();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  const performLogout = async () => {
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      // Navigate explicitly to login; RootLayout will also redirect based on auth state
+      router.replace('/(auth)/login');
+    } catch (e) {
+      console.error('Logout failed:', e);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
 
   const handleLogout = () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Logout', onPress: logout, style: 'destructive' },
-    ]);
+    // Use a custom modal instead of Alert to support Web consistently
+    setShowLogoutModal(true);
   };
 
   const handleSettings = () => {
@@ -68,10 +83,47 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutButtonText}>Logout</Text>
+        <TouchableOpacity style={[styles.logoutButton, isLoggingOut && { opacity: 0.7 }]} onPress={handleLogout} disabled={isLoggingOut}>
+          {isLoggingOut ? (
+            <ActivityIndicator color="#F5F5F5" />
+          ) : (
+            <Text style={styles.logoutButtonText}>Logout</Text>
+          )}
         </TouchableOpacity>
       </View>
+
+      {/* Logout confirmation modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Confirm logout</Text>
+            <Text style={styles.modalText}>
+              Are you sure you want to log out of STRATUM?
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButton} onPress={() => setShowLogoutModal(false)} disabled={isLoggingOut}>
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalLogoutButton, isLoggingOut && { opacity: 0.7 }]}
+                onPress={performLogout}
+                disabled={isLoggingOut}
+              >
+                {isLoggingOut ? (
+                  <ActivityIndicator color="#F5F5F5" />
+                ) : (
+                  <Text style={[styles.modalButtonText, styles.modalLogoutText]}>Logout</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -185,5 +237,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.5,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+    width: '100%',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+  },
+  modalButtonText: {
+    color: '#F5F5F5',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  modalLogoutButton: {
+    backgroundColor: '#3A0C0C',
+    borderWidth: 1,
+    borderColor: '#FF4444',
+  },
+  modalLogoutText: {
+    color: '#FF4444',
   },
 });

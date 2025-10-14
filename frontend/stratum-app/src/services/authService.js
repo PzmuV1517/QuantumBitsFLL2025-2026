@@ -54,6 +54,10 @@ export const authService = {
       // await api.post('/auth/logout');
       await AsyncStorage.removeItem('authToken');
       await AsyncStorage.removeItem('userData');
+      // Also clear axios default Authorization header immediately
+      if (api.defaults && api.defaults.headers) {
+        delete api.defaults.headers.common?.Authorization;
+      }
     } catch (error) {
       console.error('Logout error:', error);
     }
