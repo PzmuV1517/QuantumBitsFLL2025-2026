@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.database import get_db
@@ -148,12 +148,30 @@ async def delete_node(
 @router.post("/project/{project_id}/upload", response_model=FileNodeBase, status_code=status.HTTP_201_CREATED)
 async def upload_file(
     project_id: str,
-    parent_id: Optional[str] = Form(None),
-    file: UploadFile = File(...),
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     check_project_permission(project_id, current_user, db)
+    
+    # Parse form manually to be more tolerant
+    form = await request.form()
+    print(f"DEBUG: Received form keys: {list(form.keys())}")
+    
+    parent_id = form.get('parent_id')
+    file = None
+    
+    # Find the file in the form
+    for key, value in form.items():
+        print(f"DEBUG: Form field '{key}' type: {type(value)}, value preview: {str(value)[:100] if not isinstance(value, UploadFile) else 'UploadFile'}")
+        if hasattr(value, 'file'):  # UploadFile check
+            file = value
+            print(f"DEBUG: Found file in field '{key}': {file.filename}, content_type: {file.content_type}")
+            break
+    
+    if file is None:
+        raise HTTPException(status_code=422, detail=f"No file uploaded. Received keys: {list(form.keys())}")
+    
     parent = None
     if parent_id:
         parent = db.query(FileNode).filter(FileNode.id == parent_id, FileNode.project_id == project_id).first()
@@ -169,7 +187,7 @@ async def upload_file(
     node = FileNode(
         project_id=project_id,
         parent_id=parent_id,
-        name=file.filename or "file",
+    name=file.filename or "file",
         type=FileNodeType.FILE,
         mime_type=file.content_type,
         size=str(len(data)),

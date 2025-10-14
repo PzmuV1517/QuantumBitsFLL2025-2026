@@ -17,6 +17,7 @@ import { projectService } from '../../src/services/projectService';
 import { noteService } from '../../src/services/noteService';
 import { fileService } from '../../src/services/fileService';
 import * as DocumentPicker from 'expo-document-picker';
+import { Platform } from 'react-native';
 
 interface Project {
   id: string;
@@ -144,24 +145,65 @@ export default function ProjectDetailScreen() {
 
   const uploadIntoCurrent = async () => {
     try {
-      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
+      const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false, type: '*/*' });
       if (res.canceled) return;
       const asset = res.assets[0];
-      const file: any = {
-        uri: asset.uri,
-        name: asset.name || 'upload',
-        type: asset.mimeType || 'application/octet-stream',
-      };
-  const parentId = (currentFolder && currentFolder.id) ? currentFolder.id : undefined;
-  await fileService.uploadFile(id as string, file, parentId as any);
+      
+      console.log('Upload asset:', { uri: asset.uri, name: asset.name, mimeType: asset.mimeType });
+      
+      const formData = new FormData();
+      const parentId = (currentFolder && currentFolder.id) ? currentFolder.id : null;
+      if (parentId) {
+        formData.append('parent_id', String(parentId));
+      }
+      
+      console.log('DEBUG: About to append file to FormData');
+      
+      if (Platform.OS === 'web') {
+        // On web, fetch blob and create File
+        const blob = await fetch(asset.uri).then(r => r.blob());
+        let mime = asset.mimeType || blob.type || 'application/octet-stream';
+        if (!mime || mime === 'application/octet-stream') {
+          const lower = (asset.name || '').toLowerCase();
+          if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) mime = 'image/jpeg';
+          else if (lower.endsWith('.png')) mime = 'image/png';
+          else if (lower.endsWith('.heic')) mime = 'image/heic';
+        }
+        const fileName = asset.name || (asset.uri.split('/').pop() || 'upload');
+        const file = new File([blob], fileName, { type: mime });
+        formData.append('file', file, fileName);
+        console.log('DEBUG: Appended File to FormData:', { name: fileName, type: mime, size: blob.size });
+      } else {
+        // On native, use the { uri, name, type } shape that RN FormData accepts
+        const fileName = asset.name || (asset.uri.split('/').pop() || 'upload');
+        const fileType = asset.mimeType || (fileName.toLowerCase().endsWith('.png') ? 'image/png' : fileName.toLowerCase().match(/\.jpe?g$/) ? 'image/jpeg' : 'application/octet-stream');
+        formData.append('file', {
+          uri: asset.uri,
+          name: fileName,
+          type: fileType,
+        } as any);
+        console.log('DEBUG: Appended native file to FormData:', { uri: asset.uri, name: fileName, type: fileType });
+      }
+      
+      // Log FormData contents (web only, as native FormData doesn't support iteration)
+      if (Platform.OS === 'web') {
+        console.log('DEBUG: FormData entries:');
+        for (const [key, value] of (formData as any).entries()) {
+          console.log(`  ${key}:`, value);
+        }
+      }
+      
+      // Call the API directly with formData
+      const response = await fileService.uploadFile(id as string, formData);
+      console.log('Upload success:', response);
+      
       if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
       else await loadRootFiles();
     } catch (e) {
+      console.error('Upload error:', e);
       Alert.alert('Upload failed', 'Could not upload file');
     }
-  };
-
-  useEffect(() => {
+  };  useEffect(() => {
     if (activeTab === 'files') {
       loadRootFiles();
     }

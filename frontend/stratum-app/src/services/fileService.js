@@ -1,4 +1,5 @@
 import api from './api';
+import { Platform } from 'react-native';
 
 export const fileService = {
   listRoot: async (projectId) => {
@@ -24,12 +25,12 @@ export const fileService = {
   deleteNode: async (nodeId) => {
     await api.delete(`/files/${nodeId}`);
   },
-  uploadFile: async (projectId, file, parentId = null) => {
-    const form = new FormData();
-    if (parentId) form.append('parent_id', parentId);
-    form.append('file', file);
-    const res = await api.post(`/files/project/${projectId}/upload`, form, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+  uploadFile: async (projectId, formData) => {
+    // Override the default 'application/json' Content-Type to let the browser set multipart boundary
+    const res = await api.post(`/files/project/${projectId}/upload`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
     return res.data;
   },
