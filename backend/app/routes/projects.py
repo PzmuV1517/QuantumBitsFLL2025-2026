@@ -30,6 +30,10 @@ async def create_project(
     db.commit()
     db.refresh(project)
     
+    # Add the owner as a member with leader role
+    project.members.append(current_user)
+    db.commit()
+    
     return project
 
 
@@ -61,9 +65,11 @@ async def get_project(
     db: Session = Depends(get_db)
 ):
     """Get project details with members"""
+    from sqlalchemy.orm import joinedload
+    
     check_project_permission(project_id, current_user, db)
     
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).options(joinedload(Project.members)).filter(Project.id == project_id).first()
     
     if not project:
         raise HTTPException(

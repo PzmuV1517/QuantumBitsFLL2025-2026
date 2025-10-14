@@ -51,11 +51,10 @@ export default function ProjectsScreen({ navigation }) {
       onPress={() => navigation.navigate('ProjectDetail', { projectId: item.id })}
     >
       <Text style={styles.projectName}>{item.name}</Text>
-      <Text style={styles.projectDescription}>{item.description}</Text>
+      <Text style={styles.projectDescription}>{item.description || 'No description'}</Text>
       <View style={styles.projectMeta}>
-        <Text style={styles.roleText}>Role: {item.user_role}</Text>
         <Text style={styles.dateText}>
-          {new Date(item.created_at).toLocaleDateString()}
+          Created: {new Date(item.created_at).toLocaleDateString()}
         </Text>
       </View>
     </TouchableOpacity>
@@ -87,7 +86,7 @@ export default function ProjectsScreen({ navigation }) {
         <FlatList
           data={projects}
           renderItem={renderProject}
-          keyExtractor={(item) => item.id.toString()}
+          keyExtractor={(item) => item.id}
           refreshing={refreshing}
           onRefresh={handleRefresh}
           contentContainerStyle={styles.listContainer}

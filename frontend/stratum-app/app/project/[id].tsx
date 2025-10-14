@@ -9,7 +9,8 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import { Stack } from 'expo-router';
 import { projectService } from '../../src/services/projectService';
 import { noteService } from '../../src/services/noteService';
 
@@ -21,6 +22,7 @@ interface Project {
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  members?: Member[];
 }
 
 interface Note {
@@ -52,18 +54,27 @@ export default function ProjectDetailScreen() {
     loadProjectData();
   }, [id]);
 
+  // Reload notes when screen comes back into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      if (project?.id) {
+        noteService.getNotes(project.id).then(setNotes).catch(console.error);
+      }
+    }, [project?.id])
+  );
+
   const loadProjectData = async () => {
     try {
       setLoading(true);
-      const [projectData, notesData, membersData] = await Promise.all([
+      const [projectData, notesData] = await Promise.all([
         projectService.getProject(id),
         noteService.getNotes(id),
-        projectService.getProjectMembers(id),
       ]);
       
       setProject(projectData);
       setNotes(notesData);
-      setMembers(membersData);
+      // Members are now included in projectData
+      setMembers(projectData.members || []);
     } catch (error) {
       console.error('Error loading project:', error);
       Alert.alert('Error', 'Failed to load project details');
@@ -73,13 +84,17 @@ export default function ProjectDetailScreen() {
   };
 
   const handleCreateNote = () => {
-    // For now, show an alert since we haven't created the note creation screen yet
-    Alert.alert('Coming Soon', 'Note creation screen will be available soon');
+    router.push({
+      pathname: '/create-note',
+      params: { projectId: project?.id }
+    });
   };
 
   const handleNotePress = (noteId: string) => {
-    // For now, show an alert since we haven't created the note detail screen yet
-    Alert.alert('Coming Soon', 'Note detail screen will be available soon');
+    router.push({
+      pathname: '/note-detail',
+      params: { noteId, projectId: project?.id }
+    });
   };
 
   const handleManageMembers = () => {
@@ -148,8 +163,14 @@ export default function ProjectDetailScreen() {
         options={{ 
           title: project.name,
           headerStyle: { backgroundColor: '#111111' },
-          headerTintColor: '#F5F5F5',
-          headerTitleStyle: { color: '#F5F5F5' }
+          headerTintColor: '#FF2A2A',
+          headerTitleStyle: { 
+            color: '#F5F5F5',
+            fontSize: 18,
+            fontWeight: '600'
+          },
+          headerBackTitle: 'Projects',
+          headerShown: true,
         }} 
       />
       

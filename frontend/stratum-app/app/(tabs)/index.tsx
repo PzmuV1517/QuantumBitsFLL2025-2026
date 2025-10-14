@@ -33,10 +33,9 @@ export default function ProjectsScreen() {
   const renderProject = ({ item }: any) => (
     <TouchableOpacity style={styles.projectCard} onPress={() => router.push(`/project/${item.id}`)}>
       <Text style={styles.projectName}>{item.name}</Text>
-      <Text style={styles.projectDescription}>{item.description}</Text>
+      <Text style={styles.projectDescription}>{item.description || 'No description'}</Text>
       <View style={styles.projectMeta}>
-        <Text style={styles.roleText}>Role: {item.user_role}</Text>
-        <Text style={styles.dateText}>{new Date(item.created_at).toLocaleDateString()}</Text>
+        <Text style={styles.dateText}>Created: {new Date(item.created_at).toLocaleDateString()}</Text>
       </View>
     </TouchableOpacity>
   );
@@ -60,9 +59,9 @@ export default function ProjectsScreen() {
           <Text style={styles.emptySubtext}>Create your first project to get started</Text>
         </View>
       ) : (
-        <FlatList data={projects} renderItem={renderProject} keyExtractor={(item: any) => item.id.toString()} refreshing={refreshing} onRefresh={handleRefresh} contentContainerStyle={styles.listContainer} />
+        <FlatList data={projects} renderItem={renderProject} keyExtractor={(item: any) => item.id} refreshing={refreshing} onRefresh={handleRefresh} contentContainerStyle={styles.listContainer} />
       )}
-      <TouchableOpacity style={styles.fab} onPress={() => router.push('/create-project')}>
+      <TouchableOpacity style={styles.fab} onPress={() => router.push('/modal')}>
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>

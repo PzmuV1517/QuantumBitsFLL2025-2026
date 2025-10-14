@@ -12,6 +12,26 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const handleSettings = () => {
+    Alert.alert('Settings', 'Settings functionality coming soon!', [
+      { text: 'OK', style: 'default' },
+    ]);
+  };
+
+  const handleHelpSupport = () => {
+    Alert.alert('Help & Support', 'Need help?\n\n• Email: support@stratum.app\n• Documentation: docs.stratum.app\n• Community Forum: forum.stratum.app', [
+      { text: 'OK', style: 'default' },
+    ]);
+  };
+
+  const handleAbout = () => {
+    Alert.alert(
+      'About STRATUM',
+      'STRATUM v1.0.0\n\nArchaeological Site Documentation & Collaboration Platform\n\nBuilt for FLL 2025-2026 UNEARTHED Challenge\n\n© 2025 QuantumBits Team',
+      [{ text: 'OK', style: 'default' }]
+    );
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -32,16 +52,19 @@ export default function ProfileScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
           
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleSettings}>
             <Text style={styles.menuItemText}>Settings</Text>
+            <Text style={styles.menuItemArrow}>→</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleHelpSupport}>
             <Text style={styles.menuItemText}>Help & Support</Text>
+            <Text style={styles.menuItemArrow}>→</Text>
           </TouchableOpacity>
           
-          <TouchableOpacity style={styles.menuItem}>
+          <TouchableOpacity style={styles.menuItem} onPress={handleAbout}>
             <Text style={styles.menuItemText}>About</Text>
+            <Text style={styles.menuItemArrow}>→</Text>
           </TouchableOpacity>
         </View>
 
@@ -132,11 +155,18 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#2A2A2A',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   menuItemText: {
     fontSize: 16,
     color: '#F5F5F5',
     letterSpacing: 0.5,
+  },
+  menuItemArrow: {
+    fontSize: 16,
+    color: '#9A9A9A',
   },
   logoutButton: {
     backgroundColor: '#FF2A2A',

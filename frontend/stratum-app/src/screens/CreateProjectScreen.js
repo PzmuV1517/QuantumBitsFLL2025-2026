@@ -14,21 +14,19 @@ import { projectService } from '../services/projectService';
 export default function CreateProjectScreen({ navigation }) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [location, setLocation] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
-    if (!name || !description || !location) {
-      Alert.alert('Error', 'Please fill in all fields');
+    if (!name.trim()) {
+      Alert.alert('Error', 'Please enter a project name');
       return;
     }
 
     setLoading(true);
     try {
       await projectService.createProject({
-        name,
-        description,
-        location,
+        name: name.trim(),
+        description: description.trim() || null,
       });
       Alert.alert('Success', 'Project created successfully', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -53,15 +51,7 @@ export default function CreateProjectScreen({ navigation }) {
           onChangeText={setName}
         />
 
-        <Text style={styles.label}>Location *</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter site location"
-          value={location}
-          onChangeText={setLocation}
-        />
-
-        <Text style={styles.label}>Description *</Text>
+        <Text style={styles.label}>Description</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder="Enter project description"

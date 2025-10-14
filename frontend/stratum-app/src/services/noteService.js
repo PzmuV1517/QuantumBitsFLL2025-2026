@@ -4,7 +4,7 @@ export const noteService = {
   // Get all notes for a project
   getNotes: async (projectId) => {
     try {
-      const response = await api.get(`/projects/${projectId}/notes`);
+      const response = await api.get(`/notes/project/${projectId}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -12,9 +12,9 @@ export const noteService = {
   },
 
   // Get a single note by ID
-  getNote: async (projectId, noteId) => {
+  getNote: async (noteId) => {
     try {
-      const response = await api.get(`/projects/${projectId}/notes/${noteId}`);
+      const response = await api.get(`/notes/${noteId}`);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -22,9 +22,9 @@ export const noteService = {
   },
 
   // Create a new note
-  createNote: async (projectId, noteData) => {
+  createNote: async (noteData) => {
     try {
-      const response = await api.post(`/projects/${projectId}/notes`, noteData);
+      const response = await api.post('/notes', noteData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -32,9 +32,9 @@ export const noteService = {
   },
 
   // Update a note
-  updateNote: async (projectId, noteId, noteData) => {
+  updateNote: async (noteId, noteData) => {
     try {
-      const response = await api.put(`/projects/${projectId}/notes/${noteId}`, noteData);
+      const response = await api.put(`/notes/${noteId}`, noteData);
       return response.data;
     } catch (error) {
       throw error.response?.data || error;
@@ -42,16 +42,16 @@ export const noteService = {
   },
 
   // Delete a note
-  deleteNote: async (projectId, noteId) => {
+  deleteNote: async (noteId) => {
     try {
-      await api.delete(`/projects/${projectId}/notes/${noteId}`);
+      await api.delete(`/notes/${noteId}`);
     } catch (error) {
       throw error.response?.data || error;
     }
   },
 
   // Upload a photo to a note
-  uploadPhoto: async (projectId, noteId, photoUri) => {
+  uploadPhoto: async (noteId, photoUri) => {
     try {
       const formData = new FormData();
       formData.append('file', {
@@ -61,7 +61,7 @@ export const noteService = {
       });
 
       const response = await api.post(
-        `/projects/${projectId}/notes/${noteId}/photos`,
+        `/notes/${noteId}/attachments`,
         formData,
         {
           headers: {
@@ -76,9 +76,9 @@ export const noteService = {
   },
 
   // Delete a photo from a note
-  deletePhoto: async (projectId, noteId, photoId) => {
+  deletePhoto: async (noteId, attachmentId) => {
     try {
-      await api.delete(`/projects/${projectId}/notes/${noteId}/photos/${photoId}`);
+      await api.delete(`/notes/${noteId}/attachments/${attachmentId}`);
     } catch (error) {
       throw error.response?.data || error;
     }
