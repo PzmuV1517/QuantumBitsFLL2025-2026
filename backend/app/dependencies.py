@@ -2,8 +2,9 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.firebase_config import verify_firebase_token
 from app.models import User
+from app.config import settings
+import jwt
 from datetime import datetime
 
 security = HTTPBearer()
@@ -16,38 +17,42 @@ async def get_current_user(
     """Dependency to get the current authenticated user"""
     token = credentials.credentials
     
-    # Verify Firebase token
-    decoded_token = await verify_firebase_token(token)
-    if not decoded_token:
+    try:
+        # Verify our JWT token
+        payload = jwt.decode(token, settings.APP_SECRET_KEY, algorithms=["HS256"])
+        user_id = payload.get("user_id")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token payload",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        # Get user from database
+        user = db.query(User).filter(User.id == user_id).first()
+        
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+            
+        return user
+        
+    except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
+            detail="Token has expired",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    firebase_uid = decoded_token.get('uid')
-    email = decoded_token.get('email')
-    
-    # Get or create user in database
-    user = db.query(User).filter(User.firebase_uid == firebase_uid).first()
-    
-    if not user:
-        # Create new user
-        user = User(
-            firebase_uid=firebase_uid,
-            email=email,
-            display_name=decoded_token.get('name'),
-            photo_url=decoded_token.get('picture')
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        # Update last login
-        user.last_login = datetime.utcnow()
-        db.commit()
-    
-    return user
 
 
 def check_project_permission(

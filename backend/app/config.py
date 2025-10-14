@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+import os
 
 
 class Settings(BaseSettings):
@@ -36,6 +37,10 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     ALLOWED_ORIGINS: str
     
+    # JWT
+    JWT_SECRET_KEY: str
+    JWT_EXPIRATION_HOURS: int = 24
+    
     # Environment
     ENVIRONMENT: str = "development"
     
@@ -44,7 +49,7 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",")]
     
     class Config:
-        env_file = ".env"
+        env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         case_sensitive = True
 
 

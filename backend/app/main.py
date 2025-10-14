@@ -28,9 +28,9 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(auth.router)
-app.include_router(projects.router)
-app.include_router(notes.router)
+app.include_router(auth.router, prefix="/api")
+app.include_router(projects.router, prefix="/api")
+app.include_router(notes.router, prefix="/api")
 
 
 @app.get("/")

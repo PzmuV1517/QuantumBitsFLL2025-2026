@@ -44,9 +44,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const { user } = await authService.login(email, password);
-      setUser(user);
-      return { success: true };
+      const result = await authService.login(email, password);
+      if (result.success) {
+        setUser(result.user);
+        return { success: true };
+      } else {
+        return { success: false, error: result.error };
+      }
     } catch (error: any) {
       return { success: false, error: error.message || 'Login failed' };
     }
@@ -54,9 +58,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const register = async (email: string, password: string, displayName: string) => {
     try {
-      const { user } = await authService.register(email, password, displayName);
-      setUser(user);
-      return { success: true };
+      const result = await authService.register(email, password, displayName);
+      if (result.success) {
+        setUser(result.user);
+        return { success: true };
+      } else {
+        return { success: false, error: result.error };
+      }
     } catch (error: any) {
       return { success: false, error: error.message || 'Registration failed' };
     }

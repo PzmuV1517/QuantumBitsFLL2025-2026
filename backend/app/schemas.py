@@ -10,6 +10,28 @@ class UserRole(str, Enum):
     GUEST = "guest"
 
 
+# Auth Schemas
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    display_name: str
+
+
+class FirebaseTokenRequest(BaseModel):
+    firebase_token: str
+    display_name: Optional[str] = None
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    user: 'UserResponse'
+
+
 # User Schemas
 class UserBase(BaseModel):
     email: EmailStr

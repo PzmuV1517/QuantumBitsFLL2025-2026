@@ -46,12 +46,12 @@
     },
     "extra": {
       "apiBaseUrl": "http://localhost:8000/api",
-      "firebaseApiKey": "",
-      "firebaseAuthDomain": "",
-      "firebaseProjectId": "",
-      "firebaseStorageBucket": "",
-      "firebaseMessagingSenderId": "",
-      "firebaseAppId": ""
+      "firebaseApiKey": "AIzaSyBU1hDR7aqFn2Bs_VU69pk1flJ7fWu6sBk",
+      "firebaseAuthDomain": "stratum-quantumbits.firebaseapp.com",
+      "firebaseProjectId": "stratum-quantumbits",
+      "firebaseStorageBucket": "stratum-quantumbits.firebasestorage.app",
+      "firebaseMessagingSenderId": "948078666889",
+      "firebaseAppId": "1:948078666889:web:c120c439d572b8680b5258"
     }
   }
 }
