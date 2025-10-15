@@ -23,20 +23,20 @@
 
 ### High Priority
 
-- [ ] **Project Detail Screen**
+- [x] **Project Detail Screen**
   - Show project information
   - List all notes
   - Show team members
   - Add note button
   - Edit/delete project options
 
-- [ ] **Create Note Screen**
+- [x] **Create Note Screen**
   - Title input
   - Content textarea
   - Photo picker integration
   - Save note functionality
 
-- [ ] **Note Detail Screen**
+- [x] **Note Detail Screen**
   - Display note content
   - Show attached photos
   - Edit/delete options

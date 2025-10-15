@@ -39,6 +39,7 @@ interface Note {
   author_id: string;
   created_at: string;
   updated_at: string;
+  file_node_id?: string; // add: provided by backend NoteResponse
 }
 
 interface Member {
@@ -216,6 +217,69 @@ export default function ProjectDetailScreen() {
     }
   }, [activeTab, id]);
 
+interface FileNode {
+  id: string;
+  name: string;
+  type: 'file' | 'folder' | 'note';
+  mime_type?: string;
+  note_id?: string;
+  is_locked?: boolean;
+}
+
+interface FileItemProps {
+  node: FileNode;
+  project: Project | null;
+  router: ReturnType<typeof useRouter>;
+}
+
+const renderFileName = (name: string) => {
+  if (name && name.includes('.') && !name.startsWith('.')) {
+    const base = name.replace(/\.[^.]+$/, '');
+    const ext = name.substring(name.lastIndexOf('.') + 1);
+    return (
+      <Text style={styles.fileName}>
+        {base}
+        <Text style={styles.fileExt}> .{ext}</Text>
+      </Text>
+    );
+  }
+  return <Text style={styles.fileName}>{name}</Text>;
+};
+
+const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
+  const handlePress = async () => {
+    if (node.type === 'folder') return openFolder(node);
+    if (node.type === 'note') {
+      // Open text preview for note nodes
+      router.push({ pathname: '/text-preview', params: { nodeId: node.id, name: node.name } });
+      return;
+    }
+    const fileName = node.name || '';
+    const lowerName = fileName.toLowerCase();
+
+    const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /\.(png|jpe?g|gif|webp|heic)$/i.test(fileName);
+    const isTextFile = /\.(txt|md|json|csv|log|ya?ml|xml)$/i.test(lowerName);
+
+    if (isImage) {
+      router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
+      return;
+    }
+    if (isTextFile) {
+      router.push({ pathname: '/text-preview', params: { nodeId: node.id, name: node.name } });
+      return;
+    }
+
+    Alert.alert('Unsupported file', 'This file type cannot be previewed.');
+  };
+
+  return (
+    <TouchableOpacity style={{ flex: 1 }} disabled={false} onPress={handlePress}>
+      {renderFileName(node.name)}
+    </TouchableOpacity>
+  );
+};
+  
+
   const handleCreateNote = () => {
     router.push({
       pathname: '/create-note',
@@ -223,11 +287,15 @@ export default function ProjectDetailScreen() {
     });
   };
 
-  const handleNotePress = (noteId: string) => {
-    router.push({
-      pathname: '/note-detail',
-      params: { noteId, projectId: project?.id }
-    });
+  const handleNotePress = (note: Note) => {
+    // Prefer text preview when we know the linked file node
+    if (note.file_node_id) {
+      const displayName = note.title?.endsWith('.txt') ? note.title : `${note.title}.txt`;
+      router.push({ pathname: '/text-preview', params: { nodeId: note.file_node_id, name: displayName } });
+      return;
+    }
+    // Fallback to detail if no linkage yet
+    router.push({ pathname: '/note-detail', params: { noteId: note.id, projectId: project?.id } });
   };
 
   const handleManageMembers = () => {
@@ -250,7 +318,7 @@ export default function ProjectDetailScreen() {
 
 
   const renderNote = ({ item }: { item: Note }) => (
-    <TouchableOpacity style={styles.noteCard} onPress={() => handleNotePress(item.id)}>
+    <TouchableOpacity style={styles.noteCard} onPress={() => handleNotePress(item)}>
       <View style={styles.noteHeader}>
         <Text style={styles.noteTitle} numberOfLines={1}>{item.title}</Text>
         <Text style={styles.noteDate}>
@@ -463,7 +531,8 @@ export default function ProjectDetailScreen() {
                         onPress={async () => {
                           if (node.type === 'folder') return openFolder(node);
                           if (node.type === 'note') {
-                            router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
+                            // Open text preview for note nodes
+                            router.push({ pathname: '/text-preview', params: { nodeId: node.id, name: node.name } });
                             return;
                           }
                           const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');

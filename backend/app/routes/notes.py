@@ -11,69 +11,106 @@ import uuid
 
 router = APIRouter(prefix="/notes", tags=["notes"])
 
+class NoteFileManager:
+    """Handles creation and locking of note file nodes in MinIO."""
 
+    def __init__(self, minio_client, default_extension: str = ".txt"):
+        self.minio_client = minio_client
+        self.file_extension = default_extension
+
+    def _ensure_extension(self, filename: str) -> str:
+        """Ensure the filename has the correct extension."""
+        if not filename.endswith(self.file_extension):
+            filename += self.file_extension
+        return filename
+
+    def create_note_file(self, note: Note, db: Session) -> FileNode:
+        """Create and lock a new file node for the note, and upload content to MinIO."""
+        # Ensure Notes folder exists
+        notes_folder = db.query(FileNode).filter(
+            FileNode.project_id == note.project_id,
+            FileNode.parent_id == None,
+            FileNode.name == "Notes",
+            FileNode.type == FileNodeType.FOLDER
+        ).first()
+
+        if not notes_folder:
+            notes_folder = FileNode(
+                project_id=note.project_id,
+                parent_id=None,
+                name="Notes",
+                type=FileNodeType.FOLDER,
+                is_locked=True,
+            )
+            db.add(notes_folder)
+            db.commit()
+            db.refresh(notes_folder)
+
+        filename = self._ensure_extension(note.title if note.title else "Untitled")
+
+        note_node = FileNode(
+            project_id=note.project_id,
+            parent_id=notes_folder.id,
+            name=filename,
+            type=FileNodeType.NOTE,
+            is_locked=True,
+        )
+        db.add(note_node)
+        db.commit()
+        db.refresh(note_node)
+
+        # Prepare file data for MinIO
+        file_data = note.content.encode("utf-8") if note.content else b""
+        object_name = f"notes/{note.project_id}/{note_node.id}.txt"  # clearer path structure
+
+        # Upload to MinIO
+        self.minio_client.upload_file(
+            file_data=file_data,
+            object_name=object_name,
+            content_type="text/plain"
+        )
+
+        # ✅ Save storage path for downloading later
+        note_node.storage_path = object_name
+        db.commit()
+        db.refresh(note_node)
+
+        return note_node
+
+
+
+
+# ----- FastAPI route (outside the class) -----
 @router.post("/", response_model=NoteResponse, status_code=status.HTTP_201_CREATED)
-async def create_note(
+def create_note_route(
     note_data: NoteCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Create a new note in a project"""
     check_project_permission(note_data.project_id, current_user, db)
-    
+
     note = Note(
         title=note_data.title,
         content=note_data.content,
         project_id=note_data.project_id,
         author_id=current_user.id
     )
-    
     db.add(note)
     db.commit()
     db.refresh(note)
-    
-    # Ensure Notes folder exists and create a locked file node representing this note under it
-    notes_folder = db.query(FileNode).filter(
-        FileNode.project_id == note.project_id,
-        FileNode.parent_id == None,
-        FileNode.name == "Notes",
-        FileNode.type == FileNodeType.FOLDER
 
-    ).first()
-    if not notes_folder:
-        notes_folder = FileNode(
-            project_id=note.project_id,
-            parent_id=None,
-            name="Notes",
-            type=FileNodeType.FOLDER,
-            is_locked=True,
-        )
-
-    db.add(notes_folder)
-    db.commit()
-    db.refresh(notes_folder)
-
-    filename = note.title if note.title else "Untitled"
-    if not filename.endswith(".txt"):
-        filename += ".txt"
-
-    note_node = FileNode(
-        project_id=note.project_id,
-        parent_id=notes_folder.id,
-        name=filename,
-        type=FileNodeType.NOTE,
-        is_locked=True,
-    )
-
-    db.add(note_node)
-    db.commit()
-    db.refresh(note_node)
+    file_manager = NoteFileManager(minio_client)
+    note_node = file_manager.create_note_file(note, db)
 
     link = NoteFileLink(note_id=note.id, file_node_id=note_node.id)
     db.add(link)
     db.commit()
-    
+
     return note
+
+    
+    
+
 
 
 @router.get("/project/{project_id}", response_model=List[NoteResponse])

@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+# from routes.notes import get_note
 
 
 class UserRole(str, Enum):
@@ -123,7 +124,10 @@ class NoteResponse(NoteBase):
     updated_at: datetime
     last_synced: Optional[datetime] = None
     attachments: List[NoteAttachmentResponse] = []
-    
+    file_node_id: Optional[str] = None
+    text_url: Optional[str] = None  
+
+
     class Config:
         from_attributes = True
 

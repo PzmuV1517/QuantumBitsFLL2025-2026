@@ -9,6 +9,7 @@ from app.schemas import FileNodeBase, FileNodeCreateFolder, FileNodeMoveRequest,
 from app.minio_client import minio_client
 from datetime import datetime
 import uuid
+from mimetypes import guess_type
 
 router = APIRouter(prefix="/files", tags=["files"])
 
@@ -188,28 +189,46 @@ async def upload_file(
     
     parent = None
     if parent_id:
-        parent = db.query(FileNode).filter(FileNode.id == parent_id, FileNode.project_id == project_id).first()
+        parent = db.query(FileNode).filter(
+            FileNode.id == parent_id, 
+            FileNode.project_id == project_id
+        ).first()
         if not parent:
             raise HTTPException(status_code=404, detail="Parent folder not found")
         if parent.type != FileNodeType.FOLDER:
             raise HTTPException(status_code=400, detail="Parent must be a folder")
 
+    # Read file data
     data = await file.read()
-    object_name = f"files/{project_id}/{uuid.uuid4()}"
-    await minio_client.upload_file(data, object_name, file.content_type)
 
+    # Detect MIME type if not provided or for text files
+    mime_type = file.content_type
+    if not mime_type or mime_type in ["application/octet-stream", "binary/octet-stream"]:
+        guessed_type, _ = guess_type(file.filename)
+        mime_type = guessed_type or "application/octet-stream"
+
+    # Generate unique storage path (preserve a bit of original name for readability)
+    storage_path = f"files/{project_id}/{uuid.uuid4()}_{(file.filename or 'file')[-24:]}"
+
+    # Upload to MinIO
+    await minio_client.upload_file(data, storage_path, mime_type)
+
+    # Create DB node with correct fields
     node = FileNode(
         project_id=project_id,
-        parent_id=parent_id,
-    name=file.filename or "file",
+        parent_id=parent.id if parent else None,
+        name=file.filename or "file",
         type=FileNodeType.FILE,
-        mime_type=file.content_type,
+        mime_type=mime_type,
         size=str(len(data)),
-        storage_path=object_name,
+        storage_path=storage_path,
+        is_locked=False,
     )
+    
     db.add(node)
     db.commit()
     db.refresh(node)
+
     return node
 
 
@@ -222,37 +241,83 @@ async def download_file(
     """Download a file node's content.
 
     Returns a streaming response with appropriate Content-Type and Content-Disposition.
-    Notes and folders are not downloadable.
+    Supports FILE nodes (stream from MinIO) and NOTE nodes (stream from MinIO if available, else from DB note.content).
     """
     node = db.query(FileNode).filter(FileNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
-    if node.type != FileNodeType.FILE:
-        raise HTTPException(status_code=400, detail="Only file nodes can be downloaded")
+    if node.type not in [FileNodeType.FILE, FileNodeType.NOTE]:
+        raise HTTPException(status_code=400, detail="Only file and note nodes can be downloaded")
     check_project_permission(node.project_id, current_user, db)
-    if not node.storage_path:
-        raise HTTPException(status_code=404, detail="Stored object missing")
 
-    # Stream file from MinIO to avoid loading entire content in memory for large files
-    try:
-        # Get object to stream and its stat for size
-        stat = minio_client.client.stat_object(minio_client.bucket_name, node.storage_path)
-        obj = minio_client.client.get_object(minio_client.bucket_name, node.storage_path)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to retrieve object")
-
-    def iterfile():
+    # Handle FILE nodes via MinIO streaming
+    if node.type == FileNodeType.FILE:
+        if not node.storage_path:
+            raise HTTPException(status_code=404, detail="Stored object missing")
         try:
-            for data in obj.stream(32 * 1024):
-                yield data
-        finally:
-            obj.close()
-            obj.release_conn()
+            stat = minio_client.client.stat_object(minio_client.bucket_name, node.storage_path)
+            obj = minio_client.client.get_object(minio_client.bucket_name, node.storage_path)
+        except Exception:
+            raise HTTPException(status_code=500, detail="Failed to retrieve object")
 
-    filename = node.name or "download"
-    media_type = node.mime_type or "application/octet-stream"
-    headers = {
-        "Content-Disposition": f"attachment; filename=\"{filename}\"",
-        "Content-Length": str(getattr(stat, 'size', '') or '')
-    }
-    return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+        def iterfile():
+            try:
+                for chunk in obj.stream(32 * 1024):
+                    yield chunk
+            finally:
+                obj.close()
+                obj.release_conn()
+
+        filename = node.name or "download"
+        media_type = node.mime_type or "application/octet-stream"
+        headers = {
+            "Content-Disposition": f"attachment; filename=\"{filename}\"",
+            "Content-Length": str(getattr(stat, 'size', '') or '')
+        }
+        return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+
+    # Handle NOTE nodes
+    if node.type == FileNodeType.NOTE:
+        # If storage_path is set, stream from MinIO; else, fall back to DB content
+        if node.storage_path:
+            try:
+                stat = minio_client.client.stat_object(minio_client.bucket_name, node.storage_path)
+                obj = minio_client.client.get_object(minio_client.bucket_name, node.storage_path)
+            except Exception:
+                raise HTTPException(status_code=500, detail="Failed to retrieve object")
+
+            def iterfile_note():
+                try:
+                    for chunk in obj.stream(32 * 1024):
+                        yield chunk
+                finally:
+                    obj.close()
+                    obj.release_conn()
+
+            filename = node.name or "note.txt"
+            media_type = node.mime_type or "text/plain; charset=utf-8"
+            headers = {
+                "Content-Disposition": f"attachment; filename=\"{filename}\"",
+                "Content-Length": str(getattr(stat, 'size', '') or '')
+            }
+            return StreamingResponse(iterfile_note(), media_type=media_type, headers=headers)
+
+        # No storage object: read current note content and stream it
+        link = db.query(NoteFileLink).filter(NoteFileLink.file_node_id == node.id).first()
+        if not link:
+            raise HTTPException(status_code=404, detail="Linked note not found")
+        note = db.query(Note).filter(Note.id == link.note_id).first()
+        if not note:
+            raise HTTPException(status_code=404, detail="Note not found")
+
+        data = (note.content or "").encode("utf-8")
+        filename = node.name or f"{note.title or 'note'}.txt"
+        media_type = "text/plain; charset=utf-8"
+        headers = {
+            "Content-Disposition": f"attachment; filename=\"{filename}\"",
+            "Content-Length": str(len(data))
+        }
+        return StreamingResponse(iter([data]), media_type=media_type, headers=headers)
+
+    # Should not reach here
+    raise HTTPException(status_code=400, detail="This node type cannot be downloaded")

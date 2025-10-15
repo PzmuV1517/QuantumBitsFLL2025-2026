@@ -101,6 +101,7 @@ class FileNode(Base):
     is_locked = Column(Boolean, default=False)  # for non-deletable/non-movable nodes like Notes folder or note nodes
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    storage_path = Column(String, nullable=True)  # Path in MinIO if applicable
 
     # Relationships
     project = relationship('Project', back_populates='files')
