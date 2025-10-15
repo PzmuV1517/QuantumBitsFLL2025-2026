@@ -38,6 +38,7 @@ async def create_note(
         FileNode.parent_id == None,
         FileNode.name == "Notes",
         FileNode.type == FileNodeType.FOLDER
+
     ).first()
     if not notes_folder:
         notes_folder = FileNode(
@@ -47,17 +48,23 @@ async def create_note(
             type=FileNodeType.FOLDER,
             is_locked=True,
         )
-        db.add(notes_folder)
-        db.commit()
-        db.refresh(notes_folder)
+
+    db.add(notes_folder)
+    db.commit()
+    db.refresh(notes_folder)
+
+    filename = note.title if note.title else "Untitled"
+    if not filename.endswith(".txt"):
+        filename += ".txt"
 
     note_node = FileNode(
         project_id=note.project_id,
         parent_id=notes_folder.id,
-        name=note.title,
+        name=filename,
         type=FileNodeType.NOTE,
         is_locked=True,
     )
+
     db.add(note_node)
     db.commit()
     db.refresh(note_node)
