@@ -23,10 +23,18 @@ export default function TextPreviewScreen() {
     const load = async () => {
       try {
         if (!nodeId) throw new Error('File node ID is missing.');
-        const response = await fileService.downloadFile(nodeId as string); // AxiosResponse
-        if (!response || response.status !== 200) throw new Error(`Failed to load file (${response?.status})`);
-        const text = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        setContent(text);
+        // Try to fetch as text to avoid Blob->JSON coercion issues
+        try {
+          const text = await fileService.downloadText(nodeId as string);
+          setContent(text);
+        } catch {
+          // Fallback: fetch blob then convert to text
+          const response = await fileService.downloadFile(nodeId as string);
+          if (!response || response.status !== 200) throw new Error(`Failed to load file (${response?.status})`);
+          const blob = response.data as Blob;
+          const text = await blob.text();
+          setContent(text);
+        }
       } catch (err: any) {
         console.error(err);
         Alert.alert('Error', err?.message || 'Failed to load file', [

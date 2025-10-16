@@ -35,6 +35,14 @@ export const fileService = {
     });
     return res;
   },
+  downloadText: async (nodeId) => {
+    // Prefer a text response for text/markdown content
+    const res = await api.get(`/files/${nodeId}/download`, {
+      responseType: 'text',
+      transformResponse: [(data) => data], // prevent axios from attempting JSON parse
+    });
+    return res.data; // string
+  },
   downloadFileWithProgress: async (nodeId, onProgress) => {
     const res = await api.get(`/files/${nodeId}/download`, {
       responseType: 'blob',
