@@ -17,6 +17,7 @@ export default function DataPreviewScreen() {
   const [table, setTable] = useState<string[][] | null>(null);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   // Wrap a string at fixed 15-character chunks with explicit newlines
   const wrap15 = (value: any): string => {
@@ -138,7 +139,8 @@ export default function DataPreviewScreen() {
       const file = Platform.OS === 'web' ? new File([blob], filename, { type: blob.type }) : (blob as any);
       formData.append('file', file as any, filename);
       await fileService.replaceFile(nodeId as string, formData);
-      setEditing(false);
+      // Keep current editing mode; do not force exit on save
+      setDirty(false);
       Alert.alert('Saved', 'File updated successfully.');
     } catch (e) {
       console.error(e);
@@ -198,6 +200,7 @@ export default function DataPreviewScreen() {
                                   next[rIdx][cIdx] = txt;
                                   return next;
                                 });
+                                setDirty(true);
                               }}
                             />
                           ) : (
@@ -222,10 +225,17 @@ export default function DataPreviewScreen() {
         </ScrollView>
       </ScrollView>
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={() => setEditing((e) => !e)} disabled={!table}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => {
+            // Toggle edit mode without any prompts; keep dirty so Save remains available after
+            setEditing((prev) => !prev);
+          }}
+          disabled={!table}
+        >
           <Text style={styles.actionButtonText}>{editing ? 'Stop Editing' : 'Edit'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={!table || !editing || saving}>
+        <TouchableOpacity style={[styles.actionButton, saving && { opacity: 0.6 }, !dirty && { opacity: 0.6 }]} onPress={handleSave} disabled={!table || saving || !dirty}>
           <Text style={styles.actionButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton]} onPress={handleDownload}>
