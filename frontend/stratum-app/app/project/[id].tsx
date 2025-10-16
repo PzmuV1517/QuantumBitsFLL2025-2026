@@ -436,9 +436,9 @@ export default function ProjectDetailScreen() {
 
               {fileLoading ? (
                 <ActivityIndicator color="#FF2A2A" />
-              ) : fileNodes.length > 0 ? (
+              ) : (
                 <View>
-                  {/* Breadcrumb */}
+                  {/* Breadcrumb always visible */}
                   <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center' }}>
                     {currentFolder?.id ? (
                       <TouchableOpacity onPress={loadRootFiles}>
@@ -451,7 +451,8 @@ export default function ProjectDetailScreen() {
                       <Text style={{ color: '#9A9A9A' }}>/ {currentFolder.name}</Text>
                     )}
                   </View>
-                  {fileNodes.map((node) => (
+                  {fileNodes.length > 0 ? (
+                    fileNodes.map((node) => (
                     <View
                       key={node.id}
                       style={styles.fileRow}
@@ -469,6 +470,14 @@ export default function ProjectDetailScreen() {
                           const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
                           if (isImage) {
                             router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
+                            return;
+                          }
+                          const lower = (node.name || '').toLowerCase();
+                          const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
+                          const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
+                          if (isCsv || isExcel) {
+                            router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind: isCsv ? 'csv' : 'excel' } });
+                            return;
                           }
                         }}
                       >
@@ -592,12 +601,13 @@ export default function ProjectDetailScreen() {
                         )}
                       </View>
                     </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No files</Text>
-                  <Text style={styles.emptyStateSubtext}>Create a folder or upload files</Text>
+                    ))
+                  ) : (
+                    <View style={styles.emptyState}>
+                      <Text style={styles.emptyStateText}>No files</Text>
+                      <Text style={styles.emptyStateSubtext}>Create a folder or upload files</Text>
+                    </View>
+                  )}
                 </View>
               )}
             </View>

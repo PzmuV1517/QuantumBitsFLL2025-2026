@@ -29,6 +29,10 @@ export const fileService = {
     const res = await api.post(`/files/project/${projectId}/upload`, formData);
     return res.data;
   },
+  replaceFile: async (nodeId, formData) => {
+    const res = await api.put(`/files/${nodeId}/content`, formData);
+    return res.data;
+  },
   downloadFile: async (nodeId) => {
     const res = await api.get(`/files/${nodeId}/download`, {
       responseType: 'blob',

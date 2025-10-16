@@ -256,3 +256,50 @@ async def download_file(
         "Content-Length": str(getattr(stat, 'size', '') or '')
     }
     return StreamingResponse(iterfile(), media_type=media_type, headers=headers)
+
+
+@router.put("/{node_id}/content", response_model=FileNodeBase)
+async def replace_file_content(
+    node_id: str,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Replace the bytes of a file node while preserving its name and extension.
+
+    Accepts multipart/form-data with a 'file' field. Updates mime_type and size. Denies locked nodes.
+    """
+    node = db.query(FileNode).filter(FileNode.id == node_id).first()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.type != FileNodeType.FILE:
+        raise HTTPException(status_code=400, detail="Only file nodes can be replaced")
+    check_project_permission(node.project_id, current_user, db)
+    if node.is_locked:
+        raise HTTPException(status_code=400, detail="This node cannot be modified")
+
+    form = await request.form()
+    new_file = None
+    for key, value in form.items():
+        if hasattr(value, 'file'):
+            new_file = value
+            break
+    if not new_file:
+        raise HTTPException(status_code=422, detail="No file provided")
+
+    # Read new content
+    data = await new_file.read()
+    if not node.storage_path:
+        # Assign a storage path if missing (shouldn't happen for files, but safe-guard)
+        node.storage_path = f"files/{node.project_id}/{uuid.uuid4()}"
+
+    # Upload (overwrite) to same object path
+    await minio_client.upload_file(data, node.storage_path, new_file.content_type or node.mime_type or "application/octet-stream")
+
+    # Update metadata
+    node.mime_type = new_file.content_type or node.mime_type
+    node.size = str(len(data))
+    node.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(node)
+    return node
