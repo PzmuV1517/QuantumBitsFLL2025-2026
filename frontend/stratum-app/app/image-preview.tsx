@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Alert, Platform } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { fileService } from '../src/services/fileService';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ImagePreviewScreen() {
   const { nodeId, name } = useLocalSearchParams<{ nodeId: string; name: string }>();
@@ -15,27 +14,21 @@ export default function ImagePreviewScreen() {
     let revoked = false;
     (async () => {
       try {
+        const res = await fileService.downloadFile(nodeId as string);
         if (Platform.OS === 'web') {
-          const token = await AsyncStorage.getItem('authToken');
-          try {
-            const result: any = await fileService.downloadFileStream(nodeId, token, undefined);
-            const url = window.URL.createObjectURL(result.blob);
-            if (!revoked) setBlobUrl(url);
-          } catch {
-            const res = await fileService.downloadFile(nodeId);
-            const url = window.URL.createObjectURL(res.data);
-            if (!revoked) setBlobUrl(url);
-          }
+          const url = window.URL.createObjectURL(res.data as Blob);
+          if (!revoked) setBlobUrl(url);
         } else {
-          const res = await fileService.downloadFile(nodeId);
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            if (typeof reader.result === 'string' && !revoked) setBlobUrl(reader.result);
-          };
-            reader.readAsDataURL(res.data);
+          const buf = new Uint8Array(res.data as ArrayBuffer);
+          let bin = '';
+          for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
+          // @ts-ignore
+          const b64 = (global?.btoa ?? btoa)(bin);
+          const ctype = (res.headers?.['content-type'] || res.headers?.['Content-Type'] || 'image/*') as string;
+          if (!revoked) setBlobUrl(`data:${ctype};base64,${b64}`);
         }
       } catch (e) {
-        console.error(e);
+        console.error('Image load failed', e);
         setError('Failed to load image');
       } finally {
         setLoading(false);
@@ -43,23 +36,17 @@ export default function ImagePreviewScreen() {
     })();
     return () => {
       revoked = true;
-      if (blobUrl && Platform.OS === 'web') {
+      if (Platform.OS === 'web' && blobUrl) {
         try { window.URL.revokeObjectURL(blobUrl); } catch {}
       }
     };
   }, [nodeId]);
 
   const handleDownload = async () => {
-    if (!blobUrl) return;
-    if (Platform.OS === 'web') {
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = (name as string) || 'image';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    } else {
-      Alert.alert('Download', 'Mobile download not implemented yet.');
+    try {
+      await fileService.openDownload(nodeId as string); // preserves filename via Content-Disposition
+    } catch (e: any) {
+      Alert.alert('Download failed', e?.message || 'Unable to download this file.');
     }
   };
 
@@ -92,7 +79,7 @@ export default function ImagePreviewScreen() {
         )}
       </View>
       <View style={styles.actions}>
-        <TouchableOpacity style={styles.actionButton} onPress={handleDownload} disabled={!blobUrl}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleDownload}>
           <Text style={styles.actionButtonText}>Download</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton, styles.closeButton]} onPress={() => router.back()}>

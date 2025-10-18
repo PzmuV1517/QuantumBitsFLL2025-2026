@@ -1,8 +1,8 @@
 from minio import Minio
 from minio.error import S3Error
 from app.config import settings
+import asyncio
 from io import BytesIO
-from typing import Optional
 
 
 class MinIOClient:
@@ -33,43 +33,34 @@ class MinIOClient:
         file_data: bytes,
         object_name: str,
         content_type: str = "application/octet-stream"
-    ) -> str:
+    ):
         """Upload file to MinIO"""
-        try:
-            file_stream = BytesIO(file_data)
-            self.client.put_object(
-                self.bucket_name,
-                object_name,
-                file_stream,
-                length=len(file_data),
-                content_type=content_type
-            )
-            return object_name
-        except S3Error as e:
-            print(f"✗ File upload error: {e}")
-            raise
-    
-    async def get_file(self, object_name: str) -> Optional[bytes]:
+        def _put():
+            self.client.put_object(self.bucket_name, object_name, BytesIO(file_data), length=len(file_data), content_type=content_type)
+        await asyncio.to_thread(_put)
+
+    async def get_file(self, object_name: str):
         """Get file from MinIO"""
+        def _read():
+            obj = self.client.get_object(self.bucket_name, object_name)
+            try:
+                return obj.read()
+            finally:
+                try:
+                    obj.close(); obj.release_conn()
+                except Exception:
+                    pass
         try:
-            response = self.client.get_object(self.bucket_name, object_name)
-            data = response.read()
-            response.close()
-            response.release_conn()
-            return data
-        except S3Error as e:
-            print(f"✗ File retrieval error: {e}")
+            return await asyncio.to_thread(_read)
+        except Exception:
             return None
     
-    async def delete_file(self, object_name: str) -> bool:
+    async def delete_file(self, object_name: str):
         """Delete file from MinIO"""
-        try:
+        def _del():
             self.client.remove_object(self.bucket_name, object_name)
-            return True
-        except S3Error as e:
-            print(f"✗ File deletion error: {e}")
-            return False
-    
+        await asyncio.to_thread(_del)
+
     def get_presigned_url(self, object_name: str, expiry: int = 3600) -> str:
         """Get presigned URL for file access"""
         try:
