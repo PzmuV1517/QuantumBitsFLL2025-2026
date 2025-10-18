@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.database import get_db
 from app.dependencies import get_current_user, check_project_permission
@@ -185,18 +186,51 @@ async def move_node(node_id: str, payload: FileNodeMoveRequest, current_user=Dep
     if not node:
         raise HTTPException(status_code=404, detail="Not found")
     check_project_permission(node.project_id, current_user, db)
-    # Allow moving NOTE nodes even if locked (notes-produced files),
-    # but keep the lock restriction for other node types
-    if node.is_locked and node.type != FileNodeType.NOTE:
+    # Disallow moving NOTE nodes entirely to keep them under the Notes folder
+    if node.type == FileNodeType.NOTE:
+        raise HTTPException(status_code=403, detail="Notes cannot be moved")
+    if node.is_locked:
         raise HTTPException(status_code=403, detail="Locked item cannot be moved")
-    if payload.new_parent_id:
-        parent = db.query(FileNode).filter(FileNode.id == payload.new_parent_id, FileNode.project_id == node.project_id).first()
+
+    # Normalize destination (None allowed for root)
+    dest_parent_id = payload.new_parent_id
+
+    if dest_parent_id:
+        parent = db.query(FileNode).filter(
+            FileNode.id == dest_parent_id,
+            FileNode.project_id == node.project_id
+        ).first()
         if not parent or parent.type != FileNodeType.FOLDER:
             raise HTTPException(status_code=400, detail="Invalid destination")
         if parent.is_locked:
             raise HTTPException(status_code=403, detail="Destination folder is locked")
-    node.parent_id = payload.new_parent_id
-    db.commit()
+
+    # If already in destination, no-op
+    if (node.parent_id or None) == (dest_parent_id or None):
+        return node
+
+    # Pre-check name conflict in destination
+    conflict = (
+        db.query(FileNode)
+        .filter(
+            FileNode.project_id == node.project_id,
+            FileNode.parent_id == dest_parent_id,
+            FileNode.name == node.name,
+            FileNode.id != node.id,
+        )
+        .first()
+    )
+    if conflict:
+        raise HTTPException(status_code=409, detail="A node with this name already exists in the destination")
+
+    # Move
+    node.parent_id = dest_parent_id
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Defensive: if a race caused a conflict
+        raise HTTPException(status_code=409, detail="A node with this name already exists in the destination")
     db.refresh(node)
     return node
 

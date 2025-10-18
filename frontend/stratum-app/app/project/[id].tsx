@@ -494,7 +494,20 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
           ) : activeTab === 'files' ? (
             <View>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Files</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={styles.sectionTitle}>Files</Text>
+                  {currentFolder?.id && (
+                    <TouchableOpacity
+                      style={styles.rootButton}
+                      onPress={async () => {
+                        await loadRootFiles();
+                      }}
+                    >
+                      <Text style={styles.rootButtonText}>\root</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <TouchableOpacity
                     style={styles.addButton}
@@ -585,7 +598,6 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
                                   setDownloadStatus(null);
                                 }, DOWNLOAD_FINALIZE_HOLD_MS);
                               } catch (err) {
-                                console.error('Row download failed', err);
                                 setDownloadingNodeId(null);
                                 setDownloadStatus(null);
                                 Alert.alert('Error', 'Failed to download');
@@ -596,7 +608,7 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
                           </TouchableOpacity>
                         )}
 
-                        {node.type !== 'folder' && (
+                        {node.type === 'file' && (
                           <TouchableOpacity
                             style={styles.rowActionButton}
                             onPress={() => setMoveMode({ node })}
@@ -785,8 +797,9 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
                 setMoveMode(null);
                 if (currentFolder?.id) await openFolder({ id: currentFolder.id, name: currentFolder.name });
                 else await loadRootFiles();
-              } catch (e) {
-                Alert.alert('Error', 'Failed to move');
+              } catch (e: any) {
+                const detail = e?.response?.data?.detail || 'Failed to move';
+                Alert.alert('Move failed', detail);
               }
             }}
           >
@@ -925,7 +938,37 @@ const styles = StyleSheet.create({
     color: '#9A9A9A',
     fontSize: 14,
   },
+  rowActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginLeft: 12,
+    alignItems: 'center',
+  },
+  rowActionButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  rowActionText: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   lockBadge: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 12, // space away from actions
+  },
+  rootButton: {
+    marginLeft: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  rootButtonText: {
     color: '#FF4444',
     fontSize: 12,
     fontWeight: '700',
@@ -1264,14 +1307,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: -2,
   },
-  rowActions: { flexDirection: 'row', gap: 8, marginLeft: 8 },
-  rowActionButton: {
-    backgroundColor: '#2A2A2A',
-    borderWidth: 1,
-    borderColor: '#333',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
+  rowActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginLeft: 12,
+    alignItems: 'center',
   },
-  rowActionText: { color: '#F5F5F5', fontSize: 12, fontWeight: '600' },
+  rowActionButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  rowActionText: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  lockBadge: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+    marginLeft: 12, // space away from actions
+  },
+  rootButton: {
+    marginLeft: 12,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+  },
+  rootButtonText: {
+    color: '#FF4444',
+    fontSize: 12,
+    fontWeight: '700',
+  },
 });

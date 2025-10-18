@@ -22,9 +22,22 @@ export default function ImagePreviewScreen() {
           const buf = new Uint8Array(res.data as ArrayBuffer);
           let bin = '';
           for (let i = 0; i < buf.length; i++) bin += String.fromCharCode(buf[i]);
-          // @ts-ignore
-          const b64 = (global?.btoa ?? btoa)(bin);
-          const ctype = (res.headers?.['content-type'] || res.headers?.['Content-Type'] || 'image/*') as string;
+
+          const btoaFn = (global as any)?.btoa ?? (typeof btoa !== 'undefined' ? btoa : undefined);
+          const b64 = btoaFn ? btoaFn(bin) : Buffer.from(bin, 'binary').toString('base64');
+
+          const headers = res.headers as any;
+          const getHeader = (h: any, key: string) => {
+            if (!h) return undefined;
+            if (typeof h.get === 'function') return h.get(key);
+            const lower = key.toLowerCase();
+            for (const k of Object.keys(h)) {
+              if (k.toLowerCase() === lower) return h[k];
+            }
+            return undefined;
+          };
+
+          const ctype = (getHeader(headers, 'content-type') ?? 'image/*') as string;
           if (!revoked) setBlobUrl(`data:${ctype};base64,${b64}`);
         }
       } catch (e) {
