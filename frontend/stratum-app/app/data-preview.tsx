@@ -21,6 +21,9 @@ export default function DataPreviewScreen() {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [gridReady, setGridReady] = useState(false);
+  const [originalTitle, setOriginalTitle] = useState<string>('');
+  const [editableTitle, setEditableTitle] = useState<string>('');
+  const [isNoteFile, setIsNoteFile] = useState(false);
   const gridRef = useRef<any>(null);
   const defaultCols = 1000; // virtual infinite feel
   const defaultRows = 1000;
@@ -72,33 +75,52 @@ export default function DataPreviewScreen() {
           const token = await AsyncStorage.getItem('authToken');
           const { blob }: any = await fileService.downloadFileStream(nodeId, token, undefined);
           const ext = (name as string)?.toLowerCase() || '';
-          if (!Papa) Papa = (await import('papaparse')).default || (await import('papaparse'));
-          if (!XLSX) XLSX = await import('xlsx');
-          if (!AutoSizer) AutoSizer = (await import('react-virtualized-auto-sizer')).default;
-          if (!VariableSizeGrid) VariableSizeGrid = (await import('react-window')).VariableSizeGrid;
-          setGridReady(true);
-
-          if (ext.endsWith('.csv')) {
+          
+          // Handle text files (txt, md)
+          if (ext.endsWith('.txt') || ext.endsWith('.md')) {
             const text = await blob.text();
-            const parsed = Papa.parse(text, { skipEmptyLines: true });
-            if (parsed?.data) setTable(parsed.data as any);
-            else setTextContent(text);
-          } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
-            const arrayBuffer = await blob.arrayBuffer();
-            const wb = XLSX.read(arrayBuffer, { type: 'array' });
-            const firstSheet = wb.SheetNames[0];
-            const ws = wb.Sheets[firstSheet];
-            const json = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
-            setTable(json as string[][]);
+            setTextContent(text);
+            
+            // Check if this is a note file (by checking if it's a txt file, which might be a note)
+            // We'll assume txt files could be notes and allow title editing
+            // You could also check the kind parameter or make an API call to determine if it's in Notes folder
+            if (ext.endsWith('.txt')) {
+              setIsNoteFile(true);
+              const filename = (name as string) || '';
+              const titleWithoutExt = filename.endsWith('.txt') ? filename.slice(0, -4) : filename;
+              setOriginalTitle(titleWithoutExt);
+              setEditableTitle(titleWithoutExt);
+            }
           } else {
-            // Try CSV by MIME fallback
-            try {
+            // Handle CSV/Excel files
+            if (!Papa) Papa = (await import('papaparse')).default || (await import('papaparse'));
+            if (!XLSX) XLSX = await import('xlsx');
+            if (!AutoSizer) AutoSizer = (await import('react-virtualized-auto-sizer')).default;
+            if (!VariableSizeGrid) VariableSizeGrid = (await import('react-window')).VariableSizeGrid;
+            setGridReady(true);
+
+            if (ext.endsWith('.csv')) {
               const text = await blob.text();
               const parsed = Papa.parse(text, { skipEmptyLines: true });
               if (parsed?.data) setTable(parsed.data as any);
               else setTextContent(text);
-            } catch {
-              setError('Unsupported format for preview');
+            } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+              const arrayBuffer = await blob.arrayBuffer();
+              const wb = XLSX.read(arrayBuffer, { type: 'array' });
+              const firstSheet = wb.SheetNames[0];
+              const ws = wb.Sheets[firstSheet];
+              const json = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
+              setTable(json as string[][]);
+            } else {
+              // Try CSV by MIME fallback
+              try {
+                const text = await blob.text();
+                const parsed = Papa.parse(text, { skipEmptyLines: true });
+                if (parsed?.data) setTable(parsed.data as any);
+                else setTextContent(text);
+              } catch {
+                setError('Unsupported format for preview');
+              }
             }
           }
         }
@@ -137,52 +159,78 @@ export default function DataPreviewScreen() {
   };
 
   const handleSave = async () => {
-    if (!table) return;
     if (Platform.OS !== 'web') {
       Alert.alert('Save', 'Editing and saving is only available on web for now.');
       return;
     }
     try {
       setSaving(true);
-      // Trim trailing empty rows/columns to avoid growing file size unnecessarily
-      let trimmed = table.map((r) => r.slice());
-      // Trim columns
-      let maxCol = 0;
-      for (const r of trimmed) {
-        for (let i = r.length - 1; i >= 0; i--) {
-          if (String(r[i] ?? '').length > 0) { maxCol = Math.max(maxCol, i + 1); break; }
-        }
-      }
-      trimmed = trimmed.map((r) => r.slice(0, maxCol));
-      // Trim rows
-      let lastRow = trimmed.length - 1;
-      while (lastRow >= 0) {
-        const row = trimmed[lastRow] || [];
-        const hasData = row.some((v) => String(v ?? '').length > 0);
-        if (hasData) break;
-        lastRow--;
-      }
-      trimmed = trimmed.slice(0, Math.max(0, lastRow + 1));
       const ext = (name as string)?.toLowerCase() || '';
       let blob: Blob;
-      if (ext.endsWith('.csv')) {
-        if (!Papa) Papa = (await import('papaparse')).default || (await import('papaparse'));
-        const csv = Papa.unparse(trimmed);
-        blob = new Blob([csv], { type: 'text/csv' });
+      let finalFilename = name as string;
+      
+      // Handle text files
+      if (ext.endsWith('.txt') || ext.endsWith('.md')) {
+        if (!textContent) return;
+        blob = new Blob([textContent], { type: 'text/plain' });
+        
+        // For note files, check if title changed and update filename
+        if (isNoteFile && editableTitle !== originalTitle) {
+          const newFilename = `${editableTitle}.txt`;
+          finalFilename = newFilename;
+          
+          // Rename the file first
+          try {
+            await fileService.renameNode(nodeId as string, newFilename);
+            setOriginalTitle(editableTitle); // Update the original title
+          } catch (e) {
+            console.error('Failed to rename file:', e);
+            Alert.alert('Warning', 'Failed to rename file, but content will be saved.');
+          }
+        }
+      } else if (table) {
+        // Handle CSV/Excel files
+        // Trim trailing empty rows/columns to avoid growing file size unnecessarily
+        let trimmed = table.map((r) => r.slice());
+        // Trim columns
+        let maxCol = 0;
+        for (const r of trimmed) {
+          for (let i = r.length - 1; i >= 0; i--) {
+            if (String(r[i] ?? '').length > 0) { maxCol = Math.max(maxCol, i + 1); break; }
+          }
+        }
+        trimmed = trimmed.map((r) => r.slice(0, maxCol));
+        // Trim rows
+        let lastRow = trimmed.length - 1;
+        while (lastRow >= 0) {
+          const row = trimmed[lastRow] || [];
+          const hasData = row.some((v) => String(v ?? '').length > 0);
+          if (hasData) break;
+          lastRow--;
+        }
+        trimmed = trimmed.slice(0, Math.max(0, lastRow + 1));
+        
+        if (ext.endsWith('.csv')) {
+          if (!Papa) Papa = (await import('papaparse')).default || (await import('papaparse'));
+          const csv = Papa.unparse(trimmed);
+          blob = new Blob([csv], { type: 'text/csv' });
+        } else {
+          if (!XLSX) XLSX = await import('xlsx');
+          const ws = XLSX.utils.aoa_to_sheet(trimmed);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+          const wbout = XLSX.write(wb, { bookType: ext.endsWith('.xls') ? 'xls' : 'xlsx', type: 'array' });
+          blob = new Blob([wbout], { type: ext.endsWith('.xls') ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        }
       } else {
-        if (!XLSX) XLSX = await import('xlsx');
-        const ws = XLSX.utils.aoa_to_sheet(trimmed);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-        const wbout = XLSX.write(wb, { bookType: ext.endsWith('.xls') ? 'xls' : 'xlsx', type: 'array' });
-        blob = new Blob([wbout], { type: ext.endsWith('.xls') ? 'application/vnd.ms-excel' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        return;
       }
+      
       // Upload via replaceFile
       const formData = new FormData();
-      const filename = name as string;
       // On web, wrap blob in File so filename is sent
-      const file = Platform.OS === 'web' ? new File([blob], filename, { type: blob.type }) : (blob as any);
-      formData.append('file', file as any, filename);
+      const file = Platform.OS === 'web' ? new File([blob], finalFilename, { type: blob.type }) : (blob as any);
+      formData.append('file', file as any, finalFilename);
       await fileService.replaceFile(nodeId as string, formData);
       // Keep current editing mode; do not force exit on save
       setDirty(false);
@@ -196,8 +244,17 @@ export default function DataPreviewScreen() {
   };
 
   const header = useMemo(() => {
+    const ext = (name as string)?.toLowerCase() || '';
+    if (ext.endsWith('.txt')) {
+      // For note files, show the editable title when editing, otherwise show the current title
+      if (editing && isNoteFile) {
+        return editableTitle || 'Text File';
+      }
+      return originalTitle || (name as string) || 'Text File';
+    }
+    if (ext.endsWith('.md')) return (name as string) || 'Markdown File';
     return (name as string) || (kind === 'csv' ? 'CSV' : 'Spreadsheet');
-  }, [name, kind]);
+  }, [name, kind, editing, isNoteFile, editableTitle, originalTitle]);
 
   return (
     <View style={styles.container}>
@@ -367,7 +424,44 @@ export default function DataPreviewScreen() {
             )
           ) : (
             <ScrollView style={styles.textWrapper} contentContainerStyle={{ padding: 12 }}>
-              <Text style={styles.preText}>{textContent || 'No content to display'}</Text>
+              {/* Title editor for note files */}
+              {editing && isNoteFile && (
+                <View style={styles.titleEditor}>
+                  <Text style={styles.titleLabel}>Note Title:</Text>
+                  <TextInput
+                    style={[
+                      styles.titleInput,
+                      Platform.OS === 'web' ? ({ outline: 'none' } as any) : undefined
+                    ]}
+                    value={editableTitle}
+                    onChangeText={(text) => {
+                      setEditableTitle(text);
+                      setDirty(true);
+                    }}
+                    placeholder="Enter note title..."
+                    placeholderTextColor="#666"
+                  />
+                </View>
+              )}
+              
+              {editing ? (
+                <TextInput
+                  style={[
+                    styles.textEditor,
+                    Platform.OS === 'web' ? ({ fontFamily: 'monospace', outline: 'none' } as any) : undefined
+                  ]}
+                  multiline
+                  value={textContent || ''}
+                  onChangeText={(text) => {
+                    setTextContent(text);
+                    setDirty(true);
+                  }}
+                  placeholder="Start typing..."
+                  placeholderTextColor="#666"
+                />
+              ) : (
+                <Text style={styles.preText}>{textContent || 'No content to display'}</Text>
+              )}
             </ScrollView>
           )
         )}
@@ -380,11 +474,15 @@ export default function DataPreviewScreen() {
             // Toggle edit mode without any prompts; keep dirty so Save remains available after
             setEditing((prev) => !prev);
           }}
-          disabled={!table}
+          disabled={!table && !textContent}
         >
           <Text style={styles.actionButtonText}>{editing ? 'Stop Editing' : 'Edit'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton, saving && { opacity: 0.6 }, !dirty && { opacity: 0.6 }]} onPress={handleSave} disabled={!table || saving || !dirty}>
+        <TouchableOpacity 
+          style={[styles.actionButton, saving && { opacity: 0.6 }, !dirty && { opacity: 0.6 }]} 
+          onPress={handleSave} 
+          disabled={(!table && !textContent) || saving || !dirty}
+        >
           <Text style={styles.actionButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton]} onPress={handleDownload}>
@@ -415,6 +513,40 @@ const styles = StyleSheet.create({
   moreText: { color: '#9A9A9A', padding: 8 },
   textWrapper: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', backgroundColor: '#0E0E0E' },
   preText: { color: '#EAEAEA', fontFamily: Platform.select({ web: 'monospace', default: undefined }), lineHeight: 20 },
+  textEditor: { 
+    color: '#EAEAEA', 
+    fontFamily: Platform.select({ web: 'monospace', default: undefined }), 
+    fontSize: 14, 
+    lineHeight: 20, 
+    minHeight: 200, 
+    textAlignVertical: 'top',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    padding: 0
+  },
+  titleEditor: {
+    marginBottom: 16,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A'
+  },
+  titleLabel: {
+    color: '#F5F5F5',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8
+  },
+  titleInput: {
+    color: '#EAEAEA',
+    fontSize: 16,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontWeight: '500'
+  },
   actions: { flexDirection: 'row', gap: 12, padding: 16 },
   actionButton: { flex: 1, backgroundColor: '#2A2A2A', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   closeButton: { backgroundColor: '#1A1A1A' },

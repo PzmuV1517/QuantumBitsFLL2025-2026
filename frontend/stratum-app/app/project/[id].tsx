@@ -463,20 +463,30 @@ export default function ProjectDetailScreen() {
                         disabled={false}
                         onPress={async () => {
                           if (node.type === 'folder') return openFolder(node);
-                          if (node.type === 'note') {
+                          
+                          // Check if this is a legacy note type
+                          if (node.type === 'note' && node.note_id) {
                             router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
                             return;
                           }
+                          
+                          // Handle files
                           const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
                           if (isImage) {
                             router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
                             return;
                           }
+                          
                           const lower = (node.name || '').toLowerCase();
                           const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
                           const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
-                          if (isCsv || isExcel) {
-                            router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind: isCsv ? 'csv' : 'excel' } });
+                          const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
+                          
+                          if (isCsv || isExcel || isText) {
+                            let kind = 'csv';
+                            if (isExcel) kind = 'excel';
+                            else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
+                            router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
                             return;
                           }
                         }}

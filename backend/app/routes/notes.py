@@ -21,6 +21,26 @@ async def create_note(
     """Create a new note in a project"""
     check_project_permission(note_data.project_id, current_user, db)
     
+    # Ensure Notes folder exists
+    notes_folder = db.query(FileNode).filter(
+        FileNode.project_id == note_data.project_id,
+        FileNode.parent_id == None,
+        FileNode.name == "Notes",
+        FileNode.type == FileNodeType.FOLDER
+    ).first()
+    if not notes_folder:
+        notes_folder = FileNode(
+            project_id=note_data.project_id,
+            parent_id=None,
+            name="Notes",
+            type=FileNodeType.FOLDER,
+            is_locked=True,
+        )
+        db.add(notes_folder)
+        db.commit()
+        db.refresh(notes_folder)
+    
+    # Create note in database (for backwards compatibility and metadata)
     note = Note(
         title=note_data.title,
         content=note_data.content,
@@ -32,36 +52,29 @@ async def create_note(
     db.commit()
     db.refresh(note)
     
-    # Ensure Notes folder exists and create a locked file node representing this note under it
-    notes_folder = db.query(FileNode).filter(
-        FileNode.project_id == note.project_id,
-        FileNode.parent_id == None,
-        FileNode.name == "Notes",
-        FileNode.type == FileNodeType.FOLDER
-    ).first()
-    if not notes_folder:
-        notes_folder = FileNode(
-            project_id=note.project_id,
-            parent_id=None,
-            name="Notes",
-            type=FileNodeType.FOLDER,
-            is_locked=True,
-        )
-        db.add(notes_folder)
-        db.commit()
-        db.refresh(notes_folder)
-
+    # Store note content as a txt file in MinIO
+    filename = f"{note_data.title}.txt"
+    content_bytes = (note_data.content or '').encode('utf-8')
+    storage_path = f"notes/{note_data.project_id}/{note.id}.txt"
+    
+    await minio_client.upload_file(content_bytes, storage_path, "text/plain")
+    
+    # Create file node pointing to the txt file
     note_node = FileNode(
-        project_id=note.project_id,
+        project_id=note_data.project_id,
         parent_id=notes_folder.id,
-        name=note.title,
-        type=FileNodeType.NOTE,
-        is_locked=True,
+        name=filename,
+        type=FileNodeType.FILE,
+        mime_type="text/plain",
+        size=str(len(content_bytes)),
+        storage_path=storage_path,
+        is_locked=False,  # Allow editing as regular file
     )
     db.add(note_node)
     db.commit()
     db.refresh(note_node)
 
+    # Link note to file node
     link = NoteFileLink(note_id=note.id, file_node_id=note_node.id)
     db.add(link)
     db.commit()
@@ -105,6 +118,24 @@ async def get_note(
     
     check_project_permission(note.project_id, current_user, db)
     
+    # Try to sync content from txt file if it exists
+    file_link = db.query(NoteFileLink).filter(NoteFileLink.note_id == note_id).first()
+    if file_link and file_link.file_node and file_link.file_node.storage_path:
+        try:
+            # Get content from txt file
+            file_data = await minio_client.get_file(file_link.file_node.storage_path)
+            file_content = file_data.decode('utf-8')
+            
+            # Update note content if it differs (file was edited externally)
+            if note.content != file_content:
+                note.content = file_content
+                note.updated_at = datetime.utcnow()
+                db.commit()
+                db.refresh(note)
+        except Exception as e:
+            # If file doesn't exist or can't be read, keep database content
+            print(f"Warning: Could not sync note {note_id} from file: {e}")
+    
     # Add presigned URLs to attachments
     for attachment in note.attachments:
         attachment.url = minio_client.get_presigned_url(attachment.file_path)
@@ -130,15 +161,26 @@ async def update_note(
     
     check_project_permission(note.project_id, current_user, db)
     
+    # Get the linked file node
+    file_link = db.query(NoteFileLink).filter(NoteFileLink.note_id == note_id).first()
+    file_node = file_link.file_node if file_link else None
+    
     # Update fields
     if note_data.title is not None:
         note.title = note_data.title
-        # Reflect title change in file node, if exists
-        if note.file_link and note.file_link.file_node:
-            note.file_link.file_node.name = note.title
-            note.file_link.file_node.updated_at = datetime.utcnow()
+        # Update filename in file node
+        if file_node:
+            file_node.name = f"{note_data.title}.txt"
+            file_node.updated_at = datetime.utcnow()
+            
     if note_data.content is not None:
         note.content = note_data.content
+        # Update txt file content in MinIO
+        if file_node and file_node.storage_path:
+            content_bytes = (note_data.content or '').encode('utf-8')
+            await minio_client.upload_file(content_bytes, file_node.storage_path, "text/plain")
+            file_node.size = str(len(content_bytes))
+            file_node.updated_at = datetime.utcnow()
     
     note.updated_at = datetime.utcnow()
     
@@ -146,6 +188,55 @@ async def update_note(
     db.refresh(note)
     
     return note
+
+
+@router.post("/{note_id}/sync-from-file", response_model=NoteResponse)
+async def sync_note_from_file(
+    note_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sync note content from its associated txt file"""
+    note = db.query(Note).filter(Note.id == note_id).first()
+    
+    if not note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Note not found"
+        )
+    
+    check_project_permission(note.project_id, current_user, db)
+    
+    # Get the linked file node
+    file_link = db.query(NoteFileLink).filter(NoteFileLink.note_id == note_id).first()
+    if not file_link or not file_link.file_node or not file_link.file_node.storage_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No associated txt file found"
+        )
+    
+    try:
+        # Get content from txt file
+        file_data = await minio_client.get_file(file_link.file_node.storage_path)
+        file_content = file_data.decode('utf-8')
+        
+        # Update note content and title from filename
+        note.content = file_content
+        filename = file_link.file_node.name
+        if filename.endswith('.txt'):
+            note.title = filename[:-4]  # Remove .txt extension
+        note.updated_at = datetime.utcnow()
+        
+        db.commit()
+        db.refresh(note)
+        
+        return note
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync from file: {str(e)}"
+        )
 
 
 @router.delete("/{note_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -169,13 +260,15 @@ async def delete_note(
     if note.author_id != current_user.id:
         check_project_permission(note.project_id, current_user, db, required_role="leader")
     
+    # Delete txt file from MinIO
+    file_link = db.query(NoteFileLink).filter(NoteFileLink.note_id == note_id).first()
+    if file_link and file_link.file_node and file_link.file_node.storage_path:
+        await minio_client.delete_file(file_link.file_node.storage_path)
+        db.delete(file_link.file_node)
+    
     # Delete attachments from MinIO
     for attachment in note.attachments:
         await minio_client.delete_file(attachment.file_path)
-    
-    # Delete associated file node if present
-    if note.file_link and note.file_link.file_node:
-        db.delete(note.file_link.file_node)
     
     db.delete(note)
     db.commit()
