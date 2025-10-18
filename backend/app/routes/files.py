@@ -5,7 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.database import get_db
 from app.dependencies import get_current_user, check_project_permission
-from app.models import User, FileNode, FileNodeType, Note, NoteFileLink
+from app.models import User, Project, FileNode, FileNodeType, Note, NoteFileLink
 from app.schemas import FileNodeBase, FileNodeCreateFolder, FileNodeMoveRequest, FileNodeRenameRequest
 from app.minio_client import minio_client
 from datetime import datetime
@@ -62,7 +62,12 @@ def _ensure_project_access(project_id: str, current_user, db: Session) -> None:
 
 # List root nodes for project
 @router.get("/project/{project_id}", response_model=List[FileNodeBase])
-async def list_root(project_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_project_root(
+    project_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List root-level file nodes for a project"""
     check_project_permission(project_id, current_user, db)
     nodes = (
         db.query(FileNode)
@@ -74,7 +79,11 @@ async def list_root(project_id: str, current_user=Depends(get_current_user), db:
 
 # List children
 @router.get("/{node_id}/children", response_model=List[FileNodeBase])
-async def list_children(node_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def list_children(
+    node_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     node = db.query(FileNode).filter(FileNode.id == node_id).first()
     if not node:
         raise HTTPException(status_code=404, detail="Folder not found")
@@ -120,9 +129,13 @@ async def create_folder(project_id: str, payload: FileNodeCreateFolder, current_
     db.refresh(node)
     return node
 
-# Upload file
-@router.post("/project/{project_id}/upload", response_model=FileNodeBase)
-async def upload_file(project_id: str, file: UploadFile = File(...), parent_id: Optional[str] = Form(None), current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+@router.post("/project/{project_id}/folders", response_model=FileNodeBase, status_code=status.HTTP_201_CREATED)
+async def create_folder(
+    project_id: str,
+    folder: FileNodeCreateFolder,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     check_project_permission(project_id, current_user, db)
 
     if parent_id:
@@ -181,19 +194,29 @@ async def rename_node(node_id: str, payload: FileNodeRenameRequest, current_user
 
 # Move
 @router.put("/{node_id}/move", response_model=FileNodeBase)
-async def move_node(node_id: str, payload: FileNodeMoveRequest, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def move_node(
+    node_id: str,
+    move: FileNodeMoveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     node = db.query(FileNode).filter(FileNode.id == node_id).first()
     if not node:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Node not found")
     check_project_permission(node.project_id, current_user, db)
     # Disallow moving NOTE nodes entirely to keep them under the Notes folder
     if node.type == FileNodeType.NOTE:
         raise HTTPException(status_code=403, detail="Notes cannot be moved")
     if node.is_locked:
-        raise HTTPException(status_code=403, detail="Locked item cannot be moved")
+        raise HTTPException(status_code=400, detail="This node cannot be moved")
 
-    # Normalize destination (None allowed for root)
-    dest_parent_id = payload.new_parent_id
+    new_parent = None
+    if move.new_parent_id:
+        new_parent = db.query(FileNode).filter(FileNode.id == move.new_parent_id, FileNode.project_id == node.project_id).first()
+        if not new_parent:
+            raise HTTPException(status_code=404, detail="New parent not found")
+        if new_parent.type != FileNodeType.FOLDER:
+            raise HTTPException(status_code=400, detail="New parent must be a folder")
 
     if dest_parent_id:
         parent = db.query(FileNode).filter(
@@ -234,23 +257,39 @@ async def move_node(node_id: str, payload: FileNodeMoveRequest, current_user=Dep
     db.refresh(node)
     return node
 
-# Delete
-@router.delete("/{node_id}", status_code=204)
-async def delete_node(node_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+
+@router.put("/{node_id}/rename", response_model=FileNodeBase)
+async def rename_node(
+    node_id: str,
+    payload: FileNodeRenameRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     node = db.query(FileNode).filter(FileNode.id == node_id).first()
     if not node:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Node not found")
     check_project_permission(node.project_id, current_user, db)
     if node.is_locked:
-        raise HTTPException(status_code=403, detail="Locked item cannot be deleted")
-    if node.type == FileNodeType.FILE and node.storage_path:
-        try:
-            await minio_client.delete_file(node.storage_path)
-        except Exception:
-            pass
-    db.delete(node)
+        raise HTTPException(status_code=400, detail="This node cannot be renamed")
+    # Preserve extension for file nodes; users can only change base name
+    if node.type == FileNodeType.FILE and node.name:
+        # Split existing name
+        if '.' in node.name and not node.name.startswith('.'):
+            *base_parts, ext = node.name.rsplit('.', 1)
+            old_ext = ext
+        else:
+            old_ext = None
+        # Extract new base (strip any extension user might have typed to avoid changing type)
+        new_base = payload.name
+        if '.' in new_base and not new_base.startswith('.'):
+            new_base = new_base.rsplit('.', 1)[0]
+        node.name = f"{new_base}.{old_ext}" if old_ext else new_base
+    else:
+        node.name = payload.name
+    node.updated_at = datetime.utcnow()
     db.commit()
-    return None
+    db.refresh(node)
+    return node
 
 def _infer_text_mime(name: Optional[str], default: str = "text/plain") -> str:
     # ensure .md -> text/markdown for frontend detection
@@ -270,8 +309,8 @@ def _infer_text_mime(name: Optional[str], default: str = "text/plain") -> str:
     guessed, _ = mimetypes.guess_type(lower)
     return guessed or default
 
-@router.get("/{node_id}/text")
-async def get_text(
+@router.delete("/{node_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_node(
     node_id: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -286,37 +325,31 @@ async def get_text(
         raise HTTPException(status_code=404, detail="Node not found")
 
     check_project_permission(node.project_id, current_user, db)
-    filename = node.name or "file.txt"
+    if node.is_locked:
+        raise HTTPException(status_code=400, detail="This node cannot be deleted")
 
-    # Note-backed text (no storage_path)
-    if node.type == FileNodeType.NOTE and not getattr(node, "storage_path", None):
-        link = db.query(NoteFileLink).filter(NoteFileLink.file_node_id == node.id).first()
-        if not link:
-            raise HTTPException(status_code=404, detail="Linked note not found")
-        note = db.query(Note).filter(Note.id == link.note_id).first()
-        if not note:
-            raise HTTPException(status_code=404, detail="Note not found")
-        content_type = _infer_text_mime(filename, "text/plain")
-        return JSONResponse({"text": note.content or "", "content_type": content_type, "filename": filename})
+    # Recursively delete subtree and storage objects
+    async def _delete_subtree(n: FileNode):
+        # delete children first
+        children = db.query(FileNode).filter(FileNode.parent_id == n.id).all()
+        for c in children:
+            await _delete_subtree(c)
+        # delete storage if file
+        if n.type == FileNodeType.FILE and n.storage_path:
+            await minio_client.delete_file(n.storage_path)
+        db.delete(n)
 
-    # File node in MinIO
-    if node.type != FileNodeType.FILE or not getattr(node, "storage_path", None):
-        raise HTTPException(status_code=400, detail="Not a text file node")
+    await _delete_subtree(node)
+    db.commit()
+    return None
 
     data = await minio_client.get_file(node.storage_path)
     if data is None:
         raise HTTPException(status_code=404, detail="Stored object not found")
 
-    try:
-        text = data.decode("utf-8")
-    except Exception:
-        text = data.decode("utf-8", errors="replace")
-    content_type = _infer_text_mime(filename, node.mime_type or "text/plain")
-    return JSONResponse({"text": text, "content_type": content_type, "filename": filename})
-
-@router.put("/{node_id}/content", response_model=FileNodeBase)
-async def replace_file_content(
-    node_id: str,
+@router.post("/project/{project_id}/upload", response_model=FileNodeBase, status_code=status.HTTP_201_CREATED)
+async def upload_file(
+    project_id: str,
     request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
@@ -342,7 +375,9 @@ async def replace_file_content(
     if not new_file:
         raise HTTPException(status_code=422, detail="No file provided")
 
-    data = await new_file.read()
+    data = await file.read()
+    object_name = f"files/{project_id}/{uuid.uuid4()}"
+    await minio_client.upload_file(data, object_name, file.content_type)
 
     # Note-backed node: update Note.content (decode UTF-8)
     if node.type == FileNodeType.NOTE and not getattr(node, "storage_path", None):
@@ -384,12 +419,26 @@ async def replace_file_content(
     db.refresh(node)
     return node
 
+
 @router.get("/{node_id}/download")
-async def download_file(node_id: str, current_user=Depends(get_current_user), db: Session = Depends(get_db)):
+async def download_file(
+    node_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Download a file node's content.
+
+    Returns a streaming response with appropriate Content-Type and Content-Disposition.
+    Notes and folders are not downloadable.
+    """
     node = db.query(FileNode).filter(FileNode.id == node_id).first()
     if not node:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="Node not found")
+    if node.type != FileNodeType.FILE:
+        raise HTTPException(status_code=400, detail="Only file nodes can be downloaded")
     check_project_permission(node.project_id, current_user, db)
+    if not node.storage_path:
+        raise HTTPException(status_code=404, detail="Stored object missing")
 
     # Note-backed text fallback
     if node.type == FileNodeType.NOTE and not getattr(node, "storage_path", None):

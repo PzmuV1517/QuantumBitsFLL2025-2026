@@ -78,9 +78,15 @@ export const fileService = {
     return api.get(`/files/${nodeId}/download`, {
       responseType,
       onDownloadProgress: (e) => {
-        if (onProgress && e) onProgress(e.loaded || 0, e.total || 0);
+        if (onProgress) {
+          const loaded = e.loaded;
+            // Some browsers supply e.total; if missing attempt to parse from headers after request
+          const total = e.total || 0;
+          onProgress(loaded, total);
+        }
       },
     });
+    return res;
   },
 
   // Fallback helper for plain text on web (used only if /text fails)
@@ -113,7 +119,8 @@ export const fileService = {
       window.URL.revokeObjectURL(url);
       return;
     }
-    Alert.alert('Download', 'Downloading files is not supported on this platform yet.');
+    const blob = new Blob(chunks, { type: response.headers.get('Content-Type') || 'application/octet-stream' });
+    return { blob, contentLength };
   },
 };
 

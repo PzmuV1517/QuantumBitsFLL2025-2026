@@ -521,19 +521,32 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
                 </View>
               </View>
 
-              {/* File list */}
-              <View>
-                {fileLoading ? (
-                  <ActivityIndicator color="#FF2A2A" />
-                ) : fileNodes && fileNodes.length > 0 ? (
-                  fileNodes.map((node) => (
-                    <View key={node.id} style={styles.fileRow}>
-                      <Text style={styles.fileIcon}>
-                        {node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}
-                      </Text>
-
+              {fileLoading ? (
+                <ActivityIndicator color="#FF2A2A" />
+              ) : fileNodes.length > 0 ? (
+                <View>
+                  {/* Breadcrumb */}
+                  <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center' }}>
+                    {currentFolder?.id ? (
+                      <TouchableOpacity onPress={loadRootFiles}>
+                        <Text style={{ color: '#FF2A2A', marginRight: 6 }}>Root</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={{ color: '#9A9A9A', marginRight: 6 }}>Root</Text>
+                    )}
+                    {currentFolder?.id && (
+                      <Text style={{ color: '#9A9A9A' }}>/ {currentFolder.name}</Text>
+                    )}
+                  </View>
+                  {fileNodes.map((node) => (
+                    <View
+                      key={node.id}
+                      style={styles.fileRow}
+                    >
+                      <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
                       <TouchableOpacity
                         style={{ flex: 1 }}
+                        disabled={false}
                         onPress={async () => {
                           try {
                             if (node.type === 'folder') {
@@ -569,65 +582,150 @@ const FileItem: React.FC<FileItemProps> = ({ node, project, router }) => {
                           }
                         }}
                       >
-                        {renderFileName(node.name)}
+                        {(() => {
+                          if (node.type === 'file' && node.name) {
+                            const hasDot = node.name.includes('.') && !node.name.startsWith('.');
+                            if (hasDot) {
+                              const base = node.name.replace(/\.[^.]+$/, '');
+                              const ext = node.name.substring(node.name.lastIndexOf('.') + 1);
+                              return (
+                                <Text style={styles.fileName}>
+                                  {base}
+                                  <Text style={styles.fileExt}> .{ext}</Text>
+                                </Text>
+                              );
+                            }
+                          }
+                          return <Text style={styles.fileName}>{node.name}</Text>;
+                        })()}
                       </TouchableOpacity>
-
-                      {/* Row actions: Download (not for folders) + Move */}
-                      <View style={styles.rowActions}>
-                        {node.type !== 'folder' && (
-                          <TouchableOpacity
-                            style={styles.rowActionButton}
-                            onPress={async () => {
-                              try {
-                                setDownloadingNodeId(node.id);
-                                setDownloadProgress(0);
-                                setDownloadStatus('in-progress');
-
-                                if (Platform.OS === 'web') {
-                                  await fileService.openDownload(node.id);
-                                } else {
-                                  await fileService.downloadFileWithProgress(node.id, (loaded, total) => {
-                                    if (total > 0) setDownloadProgress(loaded / total);
-                                  });
-                                  Alert.alert('Download', 'Download completed.');
+                      {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
+                      <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
+                        {node.type === 'file' && (
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <TouchableOpacity
+                              disabled={downloadingNodeId === node.id}
+                              onPress={async () => {
+                                try {
+                                  setDownloadingNodeId(node.id);
+                                  setDownloadProgress(0);
+                                  setDownloadStatus('in-progress');
+                                  if (Platform.OS === 'web') {
+                                    // Try streaming for accurate progress
+                                    try {
+                                      const token = await (await import('../../src/services/api')).default.interceptors?.request ? await (async () => { return await (await import('@react-native-async-storage/async-storage')).default.getItem('authToken'); })() : null;
+                                      const streamResult = await fileService.downloadFileStream(node.id, token, (loaded: number, total: number) => {
+                                        if (total) setDownloadProgress(loaded / total);
+                                      }) as any; // streaming path returns { blob, contentLength }
+                                      // Ensure progress reflects completion
+                                      setDownloadProgress(1);
+                                      const url = window.URL.createObjectURL(streamResult.blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = node.name || 'download';
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      a.remove();
+                                      window.URL.revokeObjectURL(url);
+                                    } catch (e) {
+                                      console.warn('Streaming failed, falling back to axios method', e);
+                                      const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                        if (total) setDownloadProgress(loaded / total);
+                                      });
+                                      const blob = res.data;
+                                      const url = window.URL.createObjectURL(blob);
+                                      const a = document.createElement('a');
+                                      a.href = url;
+                                      a.download = node.name || 'download';
+                                      document.body.appendChild(a);
+                                      a.click();
+                                      a.remove();
+                                      window.URL.revokeObjectURL(url);
+                                    }
+                                  } else {
+                                    const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                      if (total) setDownloadProgress(loaded / total);
+                                    });
+                                    const blob = res.data;
+                                    // Placeholder mobile handling
+                                    Alert.alert('Download', 'File downloaded (placeholder).');
+                                  }
+                                } catch (err) {
+                                  console.error('Download failed', err);
+                                  Alert.alert('Error', 'Failed to download file');
+                                } finally {
+                                  // Move to finalizing state so bar remains briefly even after we have blob
+                                  setDownloadProgress(1);
+                                  setDownloadStatus('finalizing');
+                                  setTimeout(() => {
+                                    setDownloadingNodeId(null);
+                                    setDownloadProgress(0);
+                                    setDownloadStatus(null);
+                                  }, DOWNLOAD_FINALIZE_HOLD_MS);
                                 }
-
-                                setDownloadStatus('finalizing');
-                                setTimeout(() => {
-                                  setDownloadingNodeId(null);
-                                  setDownloadStatus(null);
-                                }, DOWNLOAD_FINALIZE_HOLD_MS);
-                              } catch (err) {
-                                setDownloadingNodeId(null);
-                                setDownloadStatus(null);
-                                Alert.alert('Error', 'Failed to download');
+                              }}
+                            >
+                              <Text style={{ color: '#9A9A9A' }}>
+                                {downloadingNodeId === node.id
+                                  ? downloadStatus === 'finalizing'
+                                    ? 'Finalizing…'
+                                    : `Downloading… ${downloadProgress > 0 ? Math.round(downloadProgress * 100) + '%' : ''}`
+                                  : 'Download'}
+                              </Text>
+                            </TouchableOpacity>
+                            {downloadingNodeId === node.id && (
+                              <View style={styles.progressBarContainer}>
+                                <View style={[styles.progressBarFill, { width: `${Math.round(downloadProgress * 100)}%` }]} />
+                              </View>
+                            )}
+                          </View>
+                        )}
+                        {!node.is_locked && (
+                          <>
+                            <TouchableOpacity onPress={() => { 
+                              setRenameNode(node); 
+                              if (node.type === 'file' && node.name && node.name.includes('.') && !node.name.startsWith('.')) {
+                                setRenameText(node.name.replace(/\.[^.]+$/, '')); // base only
+                              } else {
+                                setRenameText(node.name);
                               }
                             }}
                           >
                             <Text style={styles.rowActionText}>Download</Text>
                           </TouchableOpacity>
                         )}
-
-                        {node.type === 'file' && (
-                          <TouchableOpacity
-                            style={styles.rowActionButton}
-                            onPress={() => setMoveMode({ node })}
-                          >
-                            <Text style={styles.rowActionText}>Move</Text>
-                          </TouchableOpacity>
+                        {!node.is_locked && (
+                          <>
+                            <TouchableOpacity onPress={() => { 
+                              setRenameNode(node); 
+                              if (node.type === 'file' && node.name && node.name.includes('.') && !node.name.startsWith('.')) {
+                                setRenameText(node.name.replace(/\.[^.]+$/, '')); // base only
+                              } else {
+                                setRenameText(node.name);
+                              }
+                            }}>
+                              <Text style={{ color: '#9A9A9A' }}>Rename</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setMoveMode({ node })}>
+                              <Text style={{ color: '#9A9A9A' }}>Move</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
+                              <Text style={{ color: '#FF4444' }}>Delete</Text>
+                            </TouchableOpacity>
+                          </>
                         )}
                       </View>
 
                       {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
                     </View>
-                  ))
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>No files</Text>
-                    <Text style={styles.emptyStateSubtext}>Create a folder or upload files</Text>
-                  </View>
-                )}
-              </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No files</Text>
+                  <Text style={styles.emptyStateSubtext}>Create a folder or upload files</Text>
+                </View>
+              )}
             </View>
           ) : (
             <View>
