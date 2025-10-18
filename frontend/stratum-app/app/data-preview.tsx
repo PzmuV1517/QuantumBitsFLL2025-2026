@@ -9,6 +9,11 @@ let Papa: any = null;
 let XLSX: any = null;
 let AutoSizer: any = null;
 let VariableSizeGrid: any = null;
+let ReactMarkdown: any = null;
+let remarkGfm: any = null;
+let remarkMath: any = null;
+let rehypeKatex: any = null;
+let rehypeRaw: any = null;
 
 export default function DataPreviewScreen() {
   const { nodeId, name, kind } = useLocalSearchParams<{ nodeId: string; name: string; kind?: string }>();
@@ -24,6 +29,7 @@ export default function DataPreviewScreen() {
   const [originalTitle, setOriginalTitle] = useState<string>('');
   const [editableTitle, setEditableTitle] = useState<string>('');
   const [isNoteFile, setIsNoteFile] = useState(false);
+  const [markdownReady, setMarkdownReady] = useState(false);
   const gridRef = useRef<any>(null);
   const defaultCols = 1000; // virtual infinite feel
   const defaultRows = 1000;
@@ -31,6 +37,57 @@ export default function DataPreviewScreen() {
   const rowHeaderWidth = 28; // slimmer index column
   const rowHeightPx = 30;
   const [gridScroll, setGridScroll] = useState({ left: 0, top: 0, width: 0, height: 0 });
+
+  // Inject global CSS for markdown rendering on web once
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const STYLE_ID = 'stratum-markdown-styles';
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      /* Global markdown styles for web */
+      .markdown-body { color: #EAEAEA; line-height: 1.6; font-size: 14px; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+      .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4, .markdown-body h5, .markdown-body h6 { color: #F5F5F5; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: 600; }
+      .markdown-body h1 { font-size: 2em; border-bottom: 1px solid #333; padding-bottom: 0.3em; }
+      .markdown-body h2 { font-size: 1.5em; }
+      .markdown-body h3 { font-size: 1.25em; }
+      .markdown-body p { margin: 0 0 1em 0; color: #EAEAEA; }
+      .markdown-body code { background: #1A1A1A; padding: 0.2em 0.4em; border-radius: 3px; font-size: 0.95em; font-family: SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; color: #FF6B6B; }
+      .markdown-body pre { background: #0A0A0A; padding: 1em; border-radius: 6px; overflow: auto; margin: 0 0 1em 0; }
+      .markdown-body pre code { background: transparent; padding: 0; color: #EAEAEA; }
+      .markdown-body blockquote { border-left: 4px solid #FF2A2A; padding-left: 1em; margin-left: 0; color: #CCCCCC; font-style: italic; }
+      .markdown-body ul, .markdown-body ol { padding-left: 2em; margin: 0 0 1em 0; }
+      .markdown-body li { margin-bottom: 0.5em; }
+      .markdown-body a { color: #FF2A2A; text-decoration: none; }
+      .markdown-body a:hover { text-decoration: underline; }
+      .markdown-body table { border-collapse: collapse; width: 100%; margin: 0 0 1em 0; }
+      .markdown-body th, .markdown-body td { border: 1px solid #333; padding: 0.5em; text-align: left; }
+      .markdown-body th { background: #1A1A1A; font-weight: 600; }
+      .markdown-body img { max-width: 100%; height: auto; }
+      .markdown-body hr { border: none; border-top: 1px solid #333; margin: 1.5em 0; }
+      /* Extra elements */
+      .markdown-body mark { background: #665500; color: #fff3cd; padding: 0.1em 0.2em; border-radius: 2px; }
+      .markdown-body ins { text-decoration: none; border-bottom: 2px solid #1db954; background: rgba(29,185,84,0.1); }
+      .markdown-body sup { vertical-align: super; font-size: 0.75em; }
+      .markdown-body sub { vertical-align: sub; font-size: 0.75em; }
+      /* KaTeX layout */
+      .markdown-body .katex-display { margin: 1em 0; overflow-x: auto; }
+      .markdown-body .katex { font-size: 1em; }
+    `;
+    document.head.appendChild(style);
+
+    // Inject KaTeX CSS for math rendering
+    const KATEX_ID = 'stratum-katex-css';
+    if (!document.getElementById(KATEX_ID)) {
+      const link = document.createElement('link');
+      link.id = KATEX_ID;
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+  }, []);
 
   const ensureSize = useCallback((r: number, c: number) => {
     setTable((prev) => {
@@ -77,9 +134,40 @@ export default function DataPreviewScreen() {
           const ext = (name as string)?.toLowerCase() || '';
           
           // Handle text files (txt, md)
-          if (ext.endsWith('.txt') || ext.endsWith('.md')) {
+            if (ext.endsWith('.txt') || ext.endsWith('.md')) {
             const text = await blob.text();
             setTextContent(text);
+            // Pre-load markdown renderer for .md files so we render, not plaintext
+            if (ext.endsWith('.md')) {
+                // Load core libs first
+                try {
+                  if (!ReactMarkdown) ReactMarkdown = (await import('react-markdown')).default;
+                } catch (err) {
+                  console.error('Failed to load react-markdown', err);
+                }
+                try {
+                  if (!remarkGfm) remarkGfm = (await import('remark-gfm')).default;
+                } catch (err) {
+                  console.error('Failed to load remark-gfm', err);
+                }
+                // Try optional plugins one by one; if they fail, continue without them
+                try {
+                  if (!rehypeRaw) rehypeRaw = (await import('rehype-raw')).default;
+                } catch (err) {
+                  console.warn('rehype-raw not available, HTML in markdown will be skipped.');
+                }
+                try {
+                  if (!remarkMath) remarkMath = (await import('remark-math')).default;
+                } catch (err) {
+                  console.warn('remark-math not available, math will not render.');
+                }
+                try {
+                  if (!rehypeKatex) rehypeKatex = (await import('rehype-katex')).default;
+                } catch (err) {
+                  console.warn('rehype-katex not available, math rendering will be disabled.');
+                }
+                setMarkdownReady(Boolean(ReactMarkdown));
+            }
             
             // Check if this is a note file (by checking if it's a txt file, which might be a note)
             // We'll assume txt files could be notes and allow title editing
@@ -98,6 +186,8 @@ export default function DataPreviewScreen() {
             if (!AutoSizer) AutoSizer = (await import('react-virtualized-auto-sizer')).default;
             if (!VariableSizeGrid) VariableSizeGrid = (await import('react-window')).VariableSizeGrid;
             setGridReady(true);
+
+            // (moved markdown preloading to the txt/md branch above)
 
             if (ext.endsWith('.csv')) {
               const text = await blob.text();
@@ -266,8 +356,8 @@ export default function DataPreviewScreen() {
           headerTitleStyle: { color: '#F5F5F5' },
         }}
       />
-      <ScrollView horizontal style={styles.outerHScroll} contentContainerStyle={{ flexGrow: 1 }}>
-        <ScrollView style={styles.contentScroll} contentContainerStyle={{ flexGrow: 1, padding: 12 }}>
+      <View style={styles.outerContainer}>
+        <View style={styles.contentContainer}>
         {loading && (
           <View style={styles.center}>
             <ActivityIndicator color="#FF2A2A" />
@@ -423,7 +513,7 @@ export default function DataPreviewScreen() {
               </View>
             )
           ) : (
-            <ScrollView style={styles.textWrapper} contentContainerStyle={{ padding: 12 }}>
+            <View style={styles.textWrapper}>
               {/* Title editor for note files */}
               {editing && isNoteFile && (
                 <View style={styles.titleEditor}>
@@ -460,13 +550,33 @@ export default function DataPreviewScreen() {
                   placeholderTextColor="#666"
                 />
               ) : (
-                <Text style={styles.preText}>{textContent || 'No content to display'}</Text>
+                <ScrollView style={styles.viewWrapper} contentContainerStyle={styles.viewContent}>
+                  {(() => {
+                    const ext = (name as string)?.toLowerCase() || '';
+                    if (ext.endsWith('.md') && Platform.OS === 'web' && markdownReady && ReactMarkdown) {
+                      return (
+                        <View style={{ width: '100%' }}>
+                          <ReactMarkdown
+                            className="markdown-body"
+                            remarkPlugins={[remarkGfm, remarkMath]}
+                            rehypePlugins={[rehypeRaw, rehypeKatex]}
+                            skipHtml={false}
+                          >
+                            {textContent || ''}
+                          </ReactMarkdown>
+                        </View>
+                      );
+                    }
+                    // default plain text rendering for non-markdown or while loading
+                    return <Text style={styles.preText}>{textContent || 'No content to display'}</Text>;
+                  })()}
+                </ScrollView>
               )}
-            </ScrollView>
+            </View>
           )
         )}
-        </ScrollView>
-      </ScrollView>
+        </View>
+      </View>
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
@@ -501,6 +611,8 @@ const styles = StyleSheet.create({
   content: { flex: 1, padding: 12 },
   contentScroll: { flex: 1, minHeight: 0 },
   outerHScroll: { flex: 1 },
+  outerContainer: { flex: 1 },
+  contentContainer: { flex: 1, padding: 12 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#9A9A9A' },
   errorText: { color: '#FF4444', fontSize: 16 },
@@ -511,14 +623,16 @@ const styles = StyleSheet.create({
   cellText: { color: '#EAEAEA', fontFamily: Platform.select({ web: 'monospace', default: undefined }), fontSize: 12, lineHeight: 14 },
   cellInput: { color: '#EAEAEA', paddingVertical: 2, paddingHorizontal: 4, borderWidth: 1, borderColor: '#333', borderRadius: 4, minHeight: 24, backgroundColor: '#151515', fontSize: 12 },
   moreText: { color: '#9A9A9A', padding: 8 },
-  textWrapper: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', backgroundColor: '#0E0E0E' },
+  textWrapper: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', backgroundColor: '#0E0E0E', padding: 12 },
+  viewWrapper: { flex: 1 },
+  viewContent: { flexGrow: 1 },
   preText: { color: '#EAEAEA', fontFamily: Platform.select({ web: 'monospace', default: undefined }), lineHeight: 20 },
   textEditor: { 
     color: '#EAEAEA', 
     fontFamily: Platform.select({ web: 'monospace', default: undefined }), 
     fontSize: 14, 
     lineHeight: 20, 
-    minHeight: 200, 
+    flex: 1,
     textAlignVertical: 'top',
     backgroundColor: 'transparent',
     borderWidth: 0,
@@ -553,4 +667,5 @@ const styles = StyleSheet.create({
   actionButtonText: { color: '#F5F5F5', fontWeight: '600' },
   headerCell: { backgroundColor: '#151515', borderRightWidth: 1, borderRightColor: '#2A2A2A', borderBottomWidth: 1, borderBottomColor: '#2A2A2A', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, paddingVertical: 4 },
   headerText: { color: '#9A9A9A', fontSize: 10, fontWeight: '600' },
+  markdownWrapper: {},
 });
