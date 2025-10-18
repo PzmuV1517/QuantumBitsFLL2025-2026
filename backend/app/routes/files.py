@@ -124,6 +124,21 @@ async def rename_node(
         node.name = f"{new_base}.{old_ext}" if old_ext else new_base
     else:
         node.name = payload.name
+    
+    # If this is a file in the Notes folder, sync the note title
+    if node.parent_id:
+        parent = db.query(FileNode).filter(FileNode.id == node.parent_id).first()
+        if parent and parent.name == "Notes" and node.type == FileNodeType.FILE:
+            # This is a file in the Notes folder, check if it's linked to a note
+            note_link = db.query(NoteFileLink).filter(NoteFileLink.file_node_id == node.id).first()
+            if note_link and note_link.note:
+                # Update the note title from the filename
+                if node.name.endswith('.txt'):
+                    note_link.note.title = node.name[:-4]  # Remove .txt extension
+                else:
+                    note_link.note.title = node.name
+                note_link.note.updated_at = datetime.utcnow()
+    
     node.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(node)
@@ -300,6 +315,25 @@ async def replace_file_content(
     node.mime_type = new_file.content_type or node.mime_type
     node.size = str(len(data))
     node.updated_at = datetime.utcnow()
+    
+    # If this is a note file, sync the note content
+    if node.parent_id:
+        parent = db.query(FileNode).filter(FileNode.id == node.parent_id).first()
+        if parent and parent.name == "Notes":
+            # This is a file in the Notes folder, check if it's linked to a note
+            note_link = db.query(NoteFileLink).filter(NoteFileLink.file_node_id == node.id).first()
+            if note_link and note_link.note:
+                # Update the note content from the file
+                try:
+                    note_link.note.content = data.decode('utf-8')
+                    filename = node.name
+                    if filename.endswith('.txt'):
+                        note_link.note.title = filename[:-4]  # Remove .txt extension
+                    note_link.note.updated_at = datetime.utcnow()
+                except UnicodeDecodeError:
+                    # If file is not valid UTF-8, don't update note
+                    pass
+    
     db.commit()
     db.refresh(node)
     return node
