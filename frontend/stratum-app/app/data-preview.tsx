@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TextFilePanel from '../src/components/data/TextFilePanel';
 import CsvPanel from '../src/components/data/CsvPanel';
 import ExcelPanel from '../src/components/data/ExcelPanel';
+import PdfPanel from '../src/components/data/PdfPanel';
 
 // Lazy import to avoid native bundling issues
 let Papa: any = null;
@@ -27,6 +28,7 @@ export default function DataPreviewScreen() {
   const [originalTitle, setOriginalTitle] = useState<string>('');
   const [editableTitle, setEditableTitle] = useState<string>('');
   const [isNoteFile, setIsNoteFile] = useState(false);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   // markdown handled by TextFilePanel
   const gridRef = useRef<any>(null);
   const defaultCols = 1000; // virtual infinite feel
@@ -116,11 +118,12 @@ export default function DataPreviewScreen() {
     (async () => {
       try {
         if (Platform.OS !== 'web') {
-          // For now show simple message with Download fallback on native
+          // Native: keep existing behavior (no inline PDF preview)
           const res = await fileService.downloadFile(nodeId);
           const reader = new FileReader();
           reader.onloadend = () => {
             if (!cancelled) {
+              // For native we won’t preview PDFs; leave as-is for txt/csv fallback usage
               const content = typeof reader.result === 'string' ? reader.result : '';
               setTextContent(content);
             }
@@ -130,16 +133,22 @@ export default function DataPreviewScreen() {
           const token = await AsyncStorage.getItem('authToken');
           const { blob }: any = await fileService.downloadFileStream(nodeId, token, undefined);
           const ext = (name as string)?.toLowerCase() || '';
-          
+
+          // PDF detection first
+          if (ext.endsWith('.pdf')) {
+            const url = window.URL.createObjectURL(blob);
+            if (!cancelled) {
+              setPdfUrl(url);
+              setTable(null);
+              setTextContent(null);
+            }
+            return;
+          }
+
           // Handle text files (txt, md)
-            if (ext.endsWith('.txt') || ext.endsWith('.md')) {
+          if (ext.endsWith('.txt') || ext.endsWith('.md')) {
             const text = await blob.text();
             setTextContent(text);
-            // Markdown preloading now moved into MarkdownView/TextFilePanel
-            
-            // Check if this is a note file (by checking if it's a txt file, which might be a note)
-            // We'll assume txt files could be notes and allow title editing
-            // You could also check the kind parameter or make an API call to determine if it's in Notes folder
             if (ext.endsWith('.txt')) {
               setIsNoteFile(true);
               const filename = (name as string) || '';
@@ -147,6 +156,13 @@ export default function DataPreviewScreen() {
               setOriginalTitle(titleWithoutExt);
               setEditableTitle(titleWithoutExt);
             }
+          } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
+            const arrayBuffer = await blob.arrayBuffer();
+            const wb = XLSX.read(arrayBuffer, { type: 'array' });
+            const firstSheet = wb.SheetNames[0];
+            const ws = wb.Sheets[firstSheet];
+            const json = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
+            setTable(json as string[][]);
           } else {
             // Handle CSV/Excel files
             if (!Papa) Papa = (await import('papaparse')).default || (await import('papaparse'));
@@ -162,13 +178,6 @@ export default function DataPreviewScreen() {
               const parsed = Papa.parse(text, { skipEmptyLines: true });
               if (parsed?.data) setTable(parsed.data as any);
               else setTextContent(text);
-            } else if (ext.endsWith('.xlsx') || ext.endsWith('.xls')) {
-              const arrayBuffer = await blob.arrayBuffer();
-              const wb = XLSX.read(arrayBuffer, { type: 'array' });
-              const firstSheet = wb.SheetNames[0];
-              const ws = wb.Sheets[firstSheet];
-              const json = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[];
-              setTable(json as string[][]);
             } else {
               // Try CSV by MIME fallback
               try {
@@ -186,7 +195,7 @@ export default function DataPreviewScreen() {
         console.error(e);
         setError('Failed to load file');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
@@ -301,6 +310,15 @@ export default function DataPreviewScreen() {
     }
   };
 
+  // Revoke PDF URL when it changes/unmounts
+  useEffect(() => {
+    return () => {
+      if (Platform.OS === 'web' && pdfUrl) {
+        try { window.URL.revokeObjectURL(pdfUrl); } catch {}
+      }
+    };
+  }, [pdfUrl]);
+
   const header = useMemo(() => {
     const ext = (name as string)?.toLowerCase() || '';
     if (ext.endsWith('.txt')) {
@@ -311,8 +329,11 @@ export default function DataPreviewScreen() {
       return originalTitle || (name as string) || 'Text File';
     }
     if (ext.endsWith('.md')) return (name as string) || 'Markdown File';
+    if (ext.endsWith('.pdf')) return (name as string) || 'PDF File';
     return (name as string) || (kind === 'csv' ? 'CSV' : 'Spreadsheet');
   }, [name, kind, editing, isNoteFile, editableTitle, originalTitle]);
+
+  const isPdf = ((name as string)?.toLowerCase() || '').endsWith('.pdf') || kind === 'pdf';
 
   return (
     <View style={styles.container}>
@@ -326,66 +347,65 @@ export default function DataPreviewScreen() {
       />
       <View style={styles.outerContainer}>
         <View style={styles.contentContainer}>
-        {loading && (
-          <View style={styles.center}>
-            <ActivityIndicator color="#FF2A2A" />
-            <Text style={styles.loadingText}>Loading…</Text>
-          </View>
-        )}
-        {!loading && error && (
-          <View style={styles.center}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
-        {!loading && !error && (
-          table ? (
-            (() => {
-              const ext = (name as string)?.toLowerCase() || '';
-              const isCsv = ext.endsWith('.csv') || kind === 'csv';
-              const Panel = isCsv ? CsvPanel : ExcelPanel;
-              return (
-                <Panel
-                  table={table}
-                  setTable={(updater: any) => setTable((prev) => updater(prev || [] as any) as any)}
-                  editing={editing}
-                  onDirty={() => setDirty(true)}
-                />
-              );
-            })()
-          ) : (
-            <TextFilePanel
-              editing={editing}
-              isNoteFile={isNoteFile}
-              editableTitle={editableTitle}
-              setEditableTitle={(t) => { setEditableTitle(t); setDirty(true); }}
-              textContent={textContent || ''}
-              setTextContent={(t) => { setTextContent(t); setDirty(true); }}
-              filename={(name as string) || ''}
-              onDirty={() => setDirty(true)}
-            />
-          )
-        )}
+          {loading && (
+            <View style={styles.center}>
+              <ActivityIndicator color="#FF2A2A" />
+              <Text style={styles.loadingText}>Loading…</Text>
+            </View>
+          )}
+          {!loading && error && (
+            <View style={styles.center}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+          {!loading && !error && (
+            isPdf ? (
+              <PdfPanel src={pdfUrl} />
+            ) : table ? (
+              (() => {
+                const ext = (name as string)?.toLowerCase() || '';
+                const isCsv = ext.endsWith('.csv') || kind === 'csv';
+                const Panel = isCsv ? CsvPanel : ExcelPanel;
+                return (
+                  <Panel
+                    table={table}
+                    setTable={(updater: any) => setTable((prev) => updater(prev || [] as any) as any)}
+                    editing={editing}
+                    onDirty={() => setDirty(true)}
+                  />
+                );
+              })()
+            ) : (
+              <TextFilePanel
+                editing={editing}
+                isNoteFile={isNoteFile}
+                editableTitle={editableTitle}
+                setEditableTitle={(t) => { setEditableTitle(t); setDirty(true); }}
+                textContent={textContent || ''}
+                setTextContent={(t) => { setTextContent(t); setDirty(true); }}
+                filename={(name as string) || ''}
+                onDirty={() => setDirty(true)}
+              />
+            )
+          )}
         </View>
       </View>
       <View style={styles.actions}>
         <TouchableOpacity
           style={styles.actionButton}
-          onPress={() => {
-            // Toggle edit mode without any prompts; keep dirty so Save remains available after
-            setEditing((prev) => !prev);
-          }}
-          disabled={!table && !textContent}
+          onPress={() => setEditing((prev) => !prev)}
+          disabled={isPdf || (!table && !textContent)}
         >
           <Text style={styles.actionButtonText}>{editing ? 'Stop Editing' : 'Edit'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
-          style={[styles.actionButton, saving && { opacity: 0.6 }, !dirty && { opacity: 0.6 }]} 
-          onPress={handleSave} 
-          disabled={(!table && !textContent) || saving || !dirty}
+        <TouchableOpacity
+          style={[styles.actionButton, saving && { opacity: 0.6 }, (!dirty || isPdf) && { opacity: 0.6 }]}
+          onPress={handleSave}
+          disabled={isPdf || (!table && !textContent) || saving || !dirty}
         >
           <Text style={styles.actionButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionButton]} onPress={handleDownload}>
+        <TouchableOpacity style={styles.actionButton} onPress={handleDownload}>
           <Text style={styles.actionButtonText}>Download</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.actionButton, styles.closeButton]} onPress={() => router.back()}>
