@@ -7,8 +7,7 @@ import pathlib
 PORT = 6000
 
 # Path to your frontend dist folder
-# Adjust this if your script is moved
-DIRECTORY = pathlib.Path(__file__).parent / "/dist"
+DIRECTORY = pathlib.Path(__file__).parent / "dist"
 
 class SPARequestHandler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):
