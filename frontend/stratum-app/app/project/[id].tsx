@@ -24,6 +24,7 @@ import MembersModal from '../../src/components/project/MembersModal';
 import FilesOverlay from '../../src/components/project/FilesOverlay';
 import ProjectHeader from '../../src/components/project/ProjectHeader';
 import NotesSection from '../../src/components/project/NotesSection';
+import FileGallery from '../../src/components/project/FileGallery';
 import ProjectMenuModal from '../../src/components/project/modals/ProjectMenuModal';
 import NewFolderModal from '../../src/components/project/modals/NewFolderModal';
 import DeleteConfirmModal from '../../src/components/project/modals/DeleteConfirmModal';
@@ -257,6 +258,29 @@ export default function ProjectDetailScreen() {
     }
   }, [showFilesOverlay, id]);
 
+  const openGalleryItem = (node: any) => {
+    if (node.type === 'note' && node.note_id) {
+      router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
+      return;
+    }
+    const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
+    if (isImage) {
+      router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
+      return;
+    }
+    const lower = (node.name || '').toLowerCase();
+    const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
+    const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
+    const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
+    if (isCsv || isExcel || isText) {
+      let kind = 'csv';
+      if (isExcel) kind = 'excel';
+      else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
+      router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
+      return;
+    }
+  };
+
   const handleCreateNote = () => {
     router.push({
       pathname: '/create-note',
@@ -432,10 +456,7 @@ export default function ProjectDetailScreen() {
         {/* Tab Content */}
         <View style={styles.tabContent}>
           {activeTab === 'gallery' ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>File Gallery</Text>
-              <Text style={styles.emptyStateSubtext}>Coming soon…</Text>
-            </View>
+            <FileGallery projectId={project?.id as string} onOpenItem={openGalleryItem} />
           ) : activeTab === 'notes' ? (
             <NotesSection notes={notes as any} onCreateNote={handleCreateNote} onNotePress={handleNotePress} />
           ) : null}
@@ -1086,5 +1107,72 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Gallery styles
+  galleryControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 2,
+  },
+  galleryControls: {
+    flexDirection: 'row',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+  },
+  galleryModeBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  galleryModeBtnActive: {
+    backgroundColor: '#FF2A2A',
+  },
+  galleryModeText: {
+    color: '#9A9A9A',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  galleryModeTextActive: {
+    color: '#F5F5F5',
+  },
+  galleryGroupHeader: {
+    color: '#F5F5F5',
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  galleryGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  galleryTile: {
+    width: '31%',
+    minWidth: 120,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    padding: 8,
+  },
+  galleryThumb: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  galleryIcon: {
+    fontSize: 24,
+    color: '#F5F5F5',
+  },
+  galleryName: {
+    color: '#CFCFCF',
+    fontSize: 12,
   },
 });

@@ -1,10 +1,12 @@
 import React from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, View, Text, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
 
 export default function ProjectMenuModal({ visible, membersCount, onClose, onOpenMembers, onOpenSettings }: { visible: boolean; membersCount: number; onClose: () => void; onOpenMembers: () => void; onOpenSettings: () => void; }) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.menuBackdrop}>
+        {/* Click outside to close */}
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.menuCard}>
           <TouchableOpacity style={styles.menuItem} onPress={() => { onClose(); onOpenMembers(); }}>
             <Text style={styles.menuItemText}>Members ({membersCount})</Text>
