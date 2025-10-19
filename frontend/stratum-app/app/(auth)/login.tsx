@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,66 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { Link } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../../src/services/api';
+import { config } from '../../src/config/config';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [apiInput, setApiInput] = useState('');
+  const [savingApi, setSavingApi] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const override = await AsyncStorage.getItem('apiBaseUrlOverride');
+      const current = override || config.apiBaseUrl;
+      setApiInput(current);
+      if (override) api.defaults.baseURL = override;
+    })();
+  }, []);
+
+  const validateUrl = (url: string) => /^https?:\/\//i.test(url);
+
+  const saveApiOverride = async () => {
+    if (!validateUrl(apiInput)) {
+      Alert.alert('Invalid URL', 'Please enter a valid http(s) URL, e.g. http://192.168.1.10:8000/api');
+      return;
+    }
+    try {
+      setSavingApi(true);
+      await AsyncStorage.setItem('apiBaseUrlOverride', apiInput);
+      api.defaults.baseURL = apiInput;
+      setShowDevModal(false);
+      Alert.alert('Applied', 'Backend API base URL updated for this app.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save API URL override');
+    } finally {
+      setSavingApi(false);
+    }
+  };
+
+  const resetApiOverride = async () => {
+    try {
+      setSavingApi(true);
+      await AsyncStorage.removeItem('apiBaseUrlOverride');
+      api.defaults.baseURL = config.apiBaseUrl;
+      setApiInput(config.apiBaseUrl);
+      setShowDevModal(false);
+      Alert.alert('Reset', 'Reverted to default backend API URL.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to reset API URL override');
+    } finally {
+      setSavingApi(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -76,6 +127,10 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>LOGIN</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.devButton} onPress={() => setShowDevModal(true)}>
+          <Text style={styles.devButtonText}>Dev: API Base URL</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.footer}>
@@ -86,6 +141,36 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      {/* Dev modal for API override */}
+      <Modal visible={showDevModal} transparent animationType="fade" onRequestClose={() => setShowDevModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Backend API Base URL</Text>
+            <Text style={styles.modalText}>Enter the full API url including /api. Example: http://192.168.1.100:8000/api</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="http://host:port/api"
+              placeholderTextColor="#777"
+              value={apiInput}
+              onChangeText={setApiInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButton} onPress={() => setShowDevModal(false)} disabled={savingApi}>
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444' }]} onPress={resetApiOverride} disabled={savingApi}>
+                {savingApi ? <ActivityIndicator color="#F5F5F5" /> : <Text style={[styles.modalButtonText, { color: '#FF4444' }]}>Reset</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#FF2A2A' }]} onPress={saveApiOverride} disabled={savingApi}>
+                {savingApi ? <ActivityIndicator color="#F5F5F5" /> : <Text style={[styles.modalButtonText, { color: '#F5F5F5' }]}>Save</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -174,4 +259,61 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5
   }
+  ,
+  devButton: {
+    marginTop: 12,
+    padding: 10,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: '#2A2A2A'
+  },
+  devButtonText: {
+    color: '#F5F5F5',
+    fontWeight: '600'
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#333',
+    width: '100%'
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F5F5F5',
+    marginBottom: 8
+  },
+  modalText: {
+    fontSize: 14,
+    color: '#CCCCCC',
+    marginBottom: 12
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12
+  },
+  modalButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A'
+  },
+  modalButtonText: {
+    color: '#F5F5F5',
+    fontSize: 14,
+    fontWeight: '600'
+  },
+  
 });
