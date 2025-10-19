@@ -20,9 +20,9 @@ services:
       MINIO_CONFIG_ENV_FILE: config.env
       MC_CONFIG_DIR: /tmp/.mc
     volumes:
-      - /data:/data
+      - minio_data:/data
     working_dir: /
-    restart: "no"
+    restart: unless-stopped
     labels:
       architecture: "aarch64"
       build-date: "2025-08-06T08:17:03"
@@ -64,10 +64,14 @@ services:
       PG_VERSION: "14.19-1.pgdg13+1"
       PGDATA: /var/lib/postgresql/data
     volumes:
-      - /var/lib/postgresql/data:/var/lib/postgresql/data
-    restart: "no"
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
     networks:
       - bridge_net
+
+volumes:
+  minio_data:
+  postgres_data:
 
 networks:
   bridge_net:
