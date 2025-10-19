@@ -19,7 +19,9 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.pzmuv1517.stratum",
+      "versionCode": 1
     },
     "web": {
       "output": "static",
@@ -51,7 +53,11 @@
       "firebaseProjectId": "stratum-quantumbits",
       "firebaseStorageBucket": "stratum-quantumbits.firebasestorage.app",
       "firebaseMessagingSenderId": "948078666889",
-      "firebaseAppId": "1:948078666889:web:c120c439d572b8680b5258"
+      "firebaseAppId": "1:948078666889:web:c120c439d572b8680b5258",
+      "router": {},
+      "eas": {
+        "projectId": "70f42a3a-8f7e-4f06-8f4c-d6bd3db3d486"
+      }
     }
   }
 }
