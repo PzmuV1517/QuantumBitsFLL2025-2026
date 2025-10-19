@@ -391,20 +391,24 @@ export default function DataPreviewScreen() {
         </View>
       </View>
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => setEditing((prev) => !prev)}
-          disabled={isPdf || (!table && !textContent)}
-        >
-          <Text style={styles.actionButtonText}>{editing ? 'Stop Editing' : 'Edit'}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.actionButton, saving && { opacity: 0.6 }, (!dirty || isPdf) && { opacity: 0.6 }]}
-          onPress={handleSave}
-          disabled={isPdf || (!table && !textContent) || saving || !dirty}
-        >
-          <Text style={styles.actionButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
-        </TouchableOpacity>
+        {!isPdf && (
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={() => setEditing((prev) => !prev)}
+            disabled={!table && !textContent}
+          >
+            <Text style={styles.actionButtonText}>{editing ? 'Stop Editing' : 'Edit'}</Text>
+          </TouchableOpacity>
+        )}
+        {!isPdf && (
+          <TouchableOpacity
+            style={[styles.actionButton, saving && { opacity: 0.6 }, !dirty && { opacity: 0.6 }]}
+            onPress={handleSave}
+            disabled={(!table && !textContent) || saving || !dirty}
+          >
+            <Text style={styles.actionButtonText}>{saving ? 'Saving…' : 'Save'}</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.actionButton} onPress={handleDownload}>
           <Text style={styles.actionButtonText}>Download</Text>
         </TouchableOpacity>
