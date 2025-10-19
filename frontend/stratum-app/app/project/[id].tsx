@@ -56,7 +56,7 @@ export default function ProjectDetailScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'notes' | 'members' | 'files'>('notes');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'notes'>('notes');
   const [fileNodes, setFileNodes] = useState<any[]>([]);
   const [currentFolder, setCurrentFolder] = useState<{ id: string | null; name: string } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
@@ -72,17 +72,36 @@ export default function ProjectDetailScreen() {
   const [downloadStatus, setDownloadStatus] = useState<'in-progress' | 'finalizing' | null>(null);
   const DOWNLOAD_FINALIZE_HOLD_MS = 1500; // keep 100% bar visible a bit longer so user sees completion
   // Removed inline preview (now separate screen)
+  const [showFilesOverlay, setShowFilesOverlay] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [LuFilesIcon, setLuFilesIcon] = useState<any>(null);
+  const [GiHamburger, setGiHamburger] = useState<any>(null);
+  const reopenFilesOnReturnRef = useRef(false);
+
+  useEffect(() => {
+    // Load web-only icon lazily to avoid native bundling issues
+    if (Platform.OS === 'web') {
+      import('react-icons/lu')
+        .then((mod) => setLuFilesIcon(() => mod.LuFiles))
+        .catch((e) => console.warn('react-icons not available', e));
+      import('react-icons/gi')
+        .then((mod) => setGiHamburger(() => mod.GiHamburgerMenu))
+        .catch((e) => console.warn('react-icons (gi) not available', e));
+    }
+  }, []);
 
   useEffect(() => {
     loadProjectData();
   }, [id]);
 
-  // Sync tab with route param when available
+  // Sync UI with route param when available
   useEffect(() => {
     const tabParam = (globalParams?.tab as string) || '';
-    if (tabParam === 'notes' || tabParam === 'files' || tabParam === 'members') {
-      setActiveTab(tabParam);
-    }
+    if (tabParam === 'notes') setActiveTab('notes');
+    else if (tabParam === 'gallery') setActiveTab('gallery');
+    else if (tabParam === 'files') setShowFilesOverlay(true);
+    else if (tabParam === 'members') setShowMembersModal(true);
   }, [globalParams?.tab]);
 
   // Reload notes when screen comes back into focus
@@ -92,6 +111,16 @@ export default function ProjectDetailScreen() {
         noteService.getNotes(project.id).then(setNotes).catch(console.error);
       }
     }, [project?.id])
+  );
+
+  // If we navigated to a file from the Files overlay, reopen overlay on return
+  useFocusEffect(
+    React.useCallback(() => {
+      if (reopenFilesOnReturnRef.current) {
+        setShowFilesOverlay(true);
+        reopenFilesOnReturnRef.current = false;
+      }
+    }, [])
   );
 
   // Reload project data when screen comes back into focus (after editing)
@@ -210,11 +239,14 @@ export default function ProjectDetailScreen() {
       console.error('Upload error:', e);
       Alert.alert('Upload failed', 'Could not upload file');
     }
-  };  useEffect(() => {
-    if (activeTab === 'files') {
+  };
+
+  // Load files when opening overlay
+  useEffect(() => {
+    if (showFilesOverlay) {
       loadRootFiles();
     }
-  }, [activeTab, id]);
+  }, [showFilesOverlay, id]);
 
   const handleCreateNote = () => {
     router.push({
@@ -308,17 +340,18 @@ export default function ProjectDetailScreen() {
     <View style={styles.container}>
       <Stack.Screen 
         options={{ 
-          title: project.name,
+          // Remove visible title next to back while keeping header spacing
+          headerTitle: ' ',
           headerStyle: { backgroundColor: '#111111' },
           headerTintColor: '#FF2A2A',
           headerTitleStyle: { 
-            color: '#F5F5F5',
+            color: 'transparent',
             fontSize: 18,
             fontWeight: '600'
           },
           headerBackTitle: 'Projects',
           headerShown: true,
-          // Always provide a visible back control even after reload/deep link
+          // Left side: Back button only
           headerLeft: () => (
             <TouchableOpacity
               onPress={() => router.replace('/(tabs)')}
@@ -331,15 +364,34 @@ export default function ProjectDetailScreen() {
           ),
           headerBackVisible: true,
           presentation: 'card',
+          // Right side: Files icon (left) + Burger (right)
           headerRight: () => (
-            <TouchableOpacity 
-              onPress={handleProjectSettings}
-              style={styles.settingsButton}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.settingsIcon}>Settings</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <TouchableOpacity
+                onPress={() => setShowFilesOverlay(true)}
+                style={styles.iconButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
+                {Platform.OS === 'web' && LuFilesIcon ? (
+                  <LuFilesIcon color="#FF2A2A" size={18} />
+                ) : (
+                  <Text style={styles.iconText}>📁</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setShowMenu((p) => !p)}
+                style={styles.iconButton}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.7}
+              >
+                {Platform.OS === 'web' && GiHamburger ? (
+                  <GiHamburger color="#FF2A2A" size={18} />
+                ) : (
+                  <Text style={styles.iconText}>☰</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           ),
         }} 
       />
@@ -361,8 +413,16 @@ export default function ProjectDetailScreen() {
           </View>
         </View>
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation: File Gallery + Notes */}
         <View style={styles.tabContainer}>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'gallery' && styles.activeTab]}
+            onPress={() => setActiveTab('gallery')}
+          >
+            <Text style={[styles.tabText, activeTab === 'gallery' && styles.activeTabText]}>
+              File Gallery
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'notes' && styles.activeTab]}
             onPress={() => setActiveTab('notes')}
@@ -371,27 +431,16 @@ export default function ProjectDetailScreen() {
               Notes ({notes.length})
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'files' && styles.activeTab]}
-            onPress={() => setActiveTab('files')}
-          >
-            <Text style={[styles.tabText, activeTab === 'files' && styles.activeTabText]}>
-              Files
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'members' && styles.activeTab]}
-            onPress={() => setActiveTab('members')}
-          >
-            <Text style={[styles.tabText, activeTab === 'members' && styles.activeTabText]}>
-              Members ({members.length})
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Tab Content */}
         <View style={styles.tabContent}>
-          {activeTab === 'notes' ? (
+          {activeTab === 'gallery' ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>File Gallery</Text>
+              <Text style={styles.emptyStateSubtext}>Coming soon…</Text>
+            </View>
+          ) : activeTab === 'notes' ? (
             <View>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Recent Notes</Text>
@@ -417,7 +466,66 @@ export default function ProjectDetailScreen() {
                 </View>
               )}
             </View>
-          ) : activeTab === 'files' ? (
+          ) : null}
+        </View>
+      </ScrollView>
+
+      {/* Burger menu modal */}
+      <Modal visible={showMenu} transparent animationType="fade" onRequestClose={() => setShowMenu(false)}>
+        <View style={styles.menuBackdrop}>
+          <View style={styles.menuCard}>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); setShowMembersModal(true); }}>
+              <Text style={styles.menuItemText}>Members ({members.length})</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.menuItem} onPress={() => { setShowMenu(false); handleProjectSettings(); }}>
+              <Text style={styles.menuItemText}>Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.menuItem, { justifyContent: 'center' }]} onPress={() => setShowMenu(false)}>
+              <Text style={[styles.menuItemText, { color: '#9A9A9A' }]}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Members modal (reuses members section UI) */}
+      <Modal visible={showMembersModal} transparent animationType="fade" onRequestClose={() => setShowMembersModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }] }>
+            <View style={[styles.sectionHeader, { marginBottom: 12 }] }>
+              <Text style={styles.sectionTitle}>Team Members</Text>
+              <TouchableOpacity style={styles.addButton} onPress={handleManageMembers}>
+                <Text style={styles.addButtonText}>+ Manage</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: '75%' }}>
+              {members.length > 0 ? (
+                members.map((m) => <View key={m.id} style={styles.memberCard}>{renderMember({ item: m })}</View>)
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No team members</Text>
+                  <Text style={styles.emptyStateSubtext}>Invite colleagues to collaborate</Text>
+                </View>
+              )}
+            </ScrollView>
+            <View style={{ alignItems: 'flex-end', marginTop: 12 }}>
+              <TouchableOpacity style={[styles.modalButton]} onPress={() => setShowMembersModal(false)}>
+                <Text style={styles.modalButtonText}>Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Files overlay full-screen */}
+      <Modal visible={showFilesOverlay} transparent={false} animationType="slide" onRequestClose={() => setShowFilesOverlay(false)}>
+        <View style={{ flex: 1, backgroundColor: '#111111' }}>
+          <View style={{ paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#2A2A2A', flexDirection: 'row', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setShowFilesOverlay(false)} style={{ padding: 8, marginRight: 8 }}>
+              <Text style={{ color: '#FF2A2A', fontSize: 18 }}>‹ Back</Text>
+            </TouchableOpacity>
+            <Text style={{ color: '#F5F5F5', fontSize: 18, fontWeight: '700' }}>Files</Text>
+          </View>
+          <ScrollView style={{ flex: 1, padding: 24 }}>
             <View>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Files</Text>
@@ -438,7 +546,6 @@ export default function ProjectDetailScreen() {
                 <ActivityIndicator color="#FF2A2A" />
               ) : (
                 <View>
-                  {/* Breadcrumb always visible */}
                   <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center' }}>
                     {currentFolder?.id ? (
                       <TouchableOpacity onPress={loadRootFiles}>
@@ -451,167 +558,160 @@ export default function ProjectDetailScreen() {
                       <Text style={{ color: '#9A9A9A' }}>/ {currentFolder.name}</Text>
                     )}
                   </View>
+
                   {fileNodes.length > 0 ? (
-                    fileNodes.map((node) => (
-                    <View
-                      key={node.id}
-                      style={styles.fileRow}
-                    >
-                      <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
-                      <TouchableOpacity
-                        style={{ flex: 1 }}
-                        disabled={false}
-                        onPress={async () => {
-                          if (node.type === 'folder') return openFolder(node);
-                          
-                          // Check if this is a legacy note type
-                          if (node.type === 'note' && node.note_id) {
-                            router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
-                            return;
-                          }
-                          
-                          // Handle files
-                          const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
-                          if (isImage) {
-                            router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
-                            return;
-                          }
-                          
-                          const lower = (node.name || '').toLowerCase();
-                          const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
-                          const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
-                          const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
-                          
-                          if (isCsv || isExcel || isText) {
-                            let kind = 'csv';
-                            if (isExcel) kind = 'excel';
-                            else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
-                            router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
-                            return;
-                          }
-                        }}
-                      >
-                        {(() => {
-                          if (node.type === 'file' && node.name) {
-                            const hasDot = node.name.includes('.') && !node.name.startsWith('.');
-                            if (hasDot) {
-                              const base = node.name.replace(/\.[^.]+$/, '');
-                              const ext = node.name.substring(node.name.lastIndexOf('.') + 1);
-                              return (
-                                <Text style={styles.fileName}>
-                                  {base}
-                                  <Text style={styles.fileExt}> .{ext}</Text>
-                                </Text>
-                              );
-                            }
-                          }
-                          return <Text style={styles.fileName}>{node.name}</Text>;
-                        })()}
-                      </TouchableOpacity>
-                      {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
-                      <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
-                        {node.type === 'file' && (
-                          <View style={{ alignItems: 'flex-end' }}>
-                            <TouchableOpacity
-                              disabled={downloadingNodeId === node.id}
-                              onPress={async () => {
-                                try {
-                                  setDownloadingNodeId(node.id);
-                                  setDownloadProgress(0);
-                                  setDownloadStatus('in-progress');
-                                  if (Platform.OS === 'web') {
-                                    // Try streaming for accurate progress
-                                    try {
-                                      const token = await (await import('../../src/services/api')).default.interceptors?.request ? await (async () => { return await (await import('@react-native-async-storage/async-storage')).default.getItem('authToken'); })() : null;
-                                      const streamResult = await fileService.downloadFileStream(node.id, token, (loaded: number, total: number) => {
-                                        if (total) setDownloadProgress(loaded / total);
-                                      }) as any; // streaming path returns { blob, contentLength }
-                                      // Ensure progress reflects completion
-                                      setDownloadProgress(1);
-                                      const url = window.URL.createObjectURL(streamResult.blob);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = node.name || 'download';
-                                      document.body.appendChild(a);
-                                      a.click();
-                                      a.remove();
-                                      window.URL.revokeObjectURL(url);
-                                    } catch (e) {
-                                      console.warn('Streaming failed, falling back to axios method', e);
-                                      const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
-                                        if (total) setDownloadProgress(loaded / total);
-                                      });
-                                      const blob = res.data;
-                                      const url = window.URL.createObjectURL(blob);
-                                      const a = document.createElement('a');
-                                      a.href = url;
-                                      a.download = node.name || 'download';
-                                      document.body.appendChild(a);
-                                      a.click();
-                                      a.remove();
-                                      window.URL.revokeObjectURL(url);
-                                    }
-                                  } else {
-                                    const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
-                                      if (total) setDownloadProgress(loaded / total);
-                                    });
-                                    const blob = res.data;
-                                    // Placeholder mobile handling
-                                    Alert.alert('Download', 'File downloaded (placeholder).');
-                                  }
-                                } catch (err) {
-                                  console.error('Download failed', err);
-                                  Alert.alert('Error', 'Failed to download file');
-                                } finally {
-                                  // Move to finalizing state so bar remains briefly even after we have blob
-                                  setDownloadProgress(1);
-                                  setDownloadStatus('finalizing');
-                                  setTimeout(() => {
-                                    setDownloadingNodeId(null);
-                                    setDownloadProgress(0);
-                                    setDownloadStatus(null);
-                                  }, DOWNLOAD_FINALIZE_HOLD_MS);
+                    <View>
+                      {fileNodes.map((node) => (
+                        <View key={node.id} style={styles.fileRow}>
+                          <Text style={styles.fileIcon}>{node.type === 'folder' ? '📁' : node.type === 'note' ? '📝' : '📄'}</Text>
+                          <TouchableOpacity
+                            style={{ flex: 1 }}
+                            disabled={false}
+                            onPress={async () => {
+                              if (node.type === 'folder') return openFolder(node);
+                              if (node.type === 'note' && node.note_id) {
+                                router.push({ pathname: '/note-detail', params: { noteId: node.note_id, projectId: project?.id } });
+                                return;
+                              }
+                              const isImage = (node.mime_type && node.mime_type.startsWith('image/')) || /(\.png|\.jpg|\.jpeg|\.gif|\.webp|\.heic)$/i.test(node.name || '');
+                              if (isImage) {
+                                reopenFilesOnReturnRef.current = true;
+                                setShowFilesOverlay(false);
+                                router.push({ pathname: '/image-preview', params: { nodeId: node.id, name: node.name } });
+                                return;
+                              }
+                              const lower = (node.name || '').toLowerCase();
+                              const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
+                              const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
+                              const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
+                              if (isCsv || isExcel || isText) {
+                                let kind = 'csv';
+                                if (isExcel) kind = 'excel';
+                                else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
+                                reopenFilesOnReturnRef.current = true;
+                                setShowFilesOverlay(false);
+                                router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
+                                return;
+                              }
+                            }}
+                          >
+                            {(() => {
+                              if (node.type === 'file' && node.name) {
+                                const hasDot = node.name.includes('.') && !node.name.startsWith('.');
+                                if (hasDot) {
+                                  const base = node.name.replace(/\.[^.]+$/, '');
+                                  const ext = node.name.substring(node.name.lastIndexOf('.') + 1);
+                                  return (
+                                    <Text style={styles.fileName}>
+                                      {base}
+                                      <Text style={styles.fileExt}> .{ext}</Text>
+                                    </Text>
+                                  );
                                 }
-                              }}
-                            >
-                              <Text style={{ color: '#9A9A9A' }}>
-                                {downloadingNodeId === node.id
-                                  ? downloadStatus === 'finalizing'
-                                    ? 'Finalizing…'
-                                    : `Downloading… ${downloadProgress > 0 ? Math.round(downloadProgress * 100) + '%' : ''}`
-                                  : 'Download'}
-                              </Text>
-                            </TouchableOpacity>
-                            {downloadingNodeId === node.id && (
-                              <View style={styles.progressBarContainer}>
-                                <View style={[styles.progressBarFill, { width: `${Math.round(downloadProgress * 100)}%` }]} />
+                              }
+                              return <Text style={styles.fileName}>{node.name}</Text>;
+                            })()}
+                          </TouchableOpacity>
+                          {node.is_locked && <Text style={styles.lockBadge}>LOCKED</Text>}
+                          <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
+                            {node.type === 'file' && (
+                              <View style={{ alignItems: 'flex-end' }}>
+                                <TouchableOpacity
+                                  disabled={downloadingNodeId === node.id}
+                                  onPress={async () => {
+                                    try {
+                                      setDownloadingNodeId(node.id);
+                                      setDownloadProgress(0);
+                                      setDownloadStatus('in-progress');
+                                      if (Platform.OS === 'web') {
+                                        try {
+                                          const token = await (await import('../../src/services/api')).default.interceptors?.request ? await (async () => { return await (await import('@react-native-async-storage/async-storage')).default.getItem('authToken'); })() : null;
+                                          const streamResult = await fileService.downloadFileStream(node.id, token, (loaded: number, total: number) => {
+                                            if (total) setDownloadProgress(loaded / total);
+                                          }) as any;
+                                          setDownloadProgress(1);
+                                          const url = window.URL.createObjectURL(streamResult.blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = node.name || 'download';
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          a.remove();
+                                          window.URL.revokeObjectURL(url);
+                                        } catch (e) {
+                                          console.warn('Streaming failed, falling back to axios method', e);
+                                          const res = await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                            if (total) setDownloadProgress(loaded / total);
+                                          });
+                                          const blob = res.data;
+                                          const url = window.URL.createObjectURL(blob);
+                                          const a = document.createElement('a');
+                                          a.href = url;
+                                          a.download = node.name || 'download';
+                                          document.body.appendChild(a);
+                                          a.click();
+                                          a.remove();
+                                          window.URL.revokeObjectURL(url);
+                                        }
+                                      } else {
+                                        await fileService.downloadFileWithProgress(node.id, (loaded: number, total: number) => {
+                                          if (total) setDownloadProgress(loaded / total);
+                                        });
+                                        Alert.alert('Download', 'File downloaded (placeholder).');
+                                      }
+                                    } catch (err) {
+                                      console.error('Download failed', err);
+                                      Alert.alert('Error', 'Failed to download file');
+                                    } finally {
+                                      setDownloadProgress(1);
+                                      setDownloadStatus('finalizing');
+                                      setTimeout(() => {
+                                        setDownloadingNodeId(null);
+                                        setDownloadProgress(0);
+                                        setDownloadStatus(null);
+                                      }, DOWNLOAD_FINALIZE_HOLD_MS);
+                                    }
+                                  }}
+                                >
+                                  <Text style={{ color: '#9A9A9A' }}>
+                                    {downloadingNodeId === node.id
+                                      ? downloadStatus === 'finalizing'
+                                        ? 'Finalizing…'
+                                        : `Downloading… ${downloadProgress > 0 ? Math.round(downloadProgress * 100) + '%' : ''}`
+                                      : 'Download'}
+                                  </Text>
+                                </TouchableOpacity>
+                                {downloadingNodeId === node.id && (
+                                  <View style={styles.progressBarContainer}>
+                                    <View style={[styles.progressBarFill, { width: `${Math.round(downloadProgress * 100)}%` }]} />
+                                  </View>
+                                )}
                               </View>
                             )}
+                            {!node.is_locked && (
+                              <>
+                                <TouchableOpacity onPress={() => { 
+                                  setRenameNode(node); 
+                                  if (node.type === 'file' && node.name && node.name.includes('.') && !node.name.startsWith('.')) {
+                                    setRenameText(node.name.replace(/\.[^.]+$/, ''));
+                                  } else {
+                                    setRenameText(node.name);
+                                  }
+                                }}>
+                                  <Text style={{ color: '#9A9A9A' }}>Rename</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setMoveMode({ node })}>
+                                  <Text style={{ color: '#9A9A9A' }}>Move</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
+                                  <Text style={{ color: '#FF4444' }}>Delete</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
                           </View>
-                        )}
-                        {!node.is_locked && (
-                          <>
-                            <TouchableOpacity onPress={() => { 
-                              setRenameNode(node); 
-                              if (node.type === 'file' && node.name && node.name.includes('.') && !node.name.startsWith('.')) {
-                                setRenameText(node.name.replace(/\.[^.]+$/, '')); // base only
-                              } else {
-                                setRenameText(node.name);
-                              }
-                            }}>
-                              <Text style={{ color: '#9A9A9A' }}>Rename</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setMoveMode({ node })}>
-                              <Text style={{ color: '#9A9A9A' }}>Move</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setDeleteNodeTarget(node)}>
-                              <Text style={{ color: '#FF4444' }}>Delete</Text>
-                            </TouchableOpacity>
-                          </>
-                        )}
-                      </View>
+                        </View>
+                      ))}
                     </View>
-                    ))
                   ) : (
                     <View style={styles.emptyState}>
                       <Text style={styles.emptyStateText}>No files</Text>
@@ -621,35 +721,9 @@ export default function ProjectDetailScreen() {
                 </View>
               )}
             </View>
-          ) : (
-            <View>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Team Members</Text>
-                <TouchableOpacity style={styles.addButton} onPress={handleManageMembers}>
-                  <Text style={styles.addButtonText}>+ Manage</Text>
-                </TouchableOpacity>
-              </View>
-              
-              {members.length > 0 ? (
-                <FlatList
-                  data={members}
-                  renderItem={renderMember}
-                  keyExtractor={(item) => item.id}
-                  scrollEnabled={false}
-                />
-              ) : (
-                <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>No team members</Text>
-                  <Text style={styles.emptyStateSubtext}>Invite colleagues to collaborate</Text>
-                  <TouchableOpacity style={styles.createButton} onPress={handleManageMembers}>
-                    <Text style={styles.createButtonText}>INVITE MEMBERS</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </View>
-          )}
+          </ScrollView>
         </View>
-      </ScrollView>
+      </Modal>
 
       {/* New Folder Modal */}
       <Modal visible={showNewFolderModal} transparent animationType="fade" onRequestClose={() => setShowNewFolderModal(false)}>
@@ -1266,5 +1340,38 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
     marginTop: -2,
+  },
+  iconButton: {
+    padding: 8,
+    marginHorizontal: 4,
+  },
+  iconText: {
+    color: '#FF2A2A',
+    fontSize: 18,
+  },
+  menuBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+  },
+  menuCard: {
+    backgroundColor: '#1E1E1A',
+    borderWidth: 1,
+    borderColor: '#333',
+    borderRadius: 12,
+    marginTop: 56,
+    marginRight: 12,
+    minWidth: 200,
+    paddingVertical: 8,
+  },
+  menuItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  menuItemText: {
+    color: '#F5F5F5',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
