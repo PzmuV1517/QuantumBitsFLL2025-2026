@@ -1,13 +1,33 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Modal, TextInput, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from '../../src/services/api';
+import { config } from '../../src/config/config';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [apiInput, setApiInput] = useState<string>('');
+  const [effectiveApi, setEffectiveApi] = useState<string>('');
+  const [savingApi, setSavingApi] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const override = await AsyncStorage.getItem('apiBaseUrlOverride');
+      const current = override || config.apiBaseUrl;
+      setEffectiveApi(current);
+      setApiInput(current);
+      // If override exists, ensure axios instance uses it now
+      if (override) {
+        api.defaults.baseURL = override;
+      }
+    })();
+  }, []);
 
   const performLogout = async () => {
     try {
@@ -47,13 +67,62 @@ export default function ProfileScreen() {
     );
   };
 
+  const openDevModal = async () => {
+    try {
+      const override = await AsyncStorage.getItem('apiBaseUrlOverride');
+      const current = override || config.apiBaseUrl;
+      setApiInput(current);
+      setShowDevModal(true);
+    } catch (e) {
+      setApiInput(config.apiBaseUrl);
+      setShowDevModal(true);
+    }
+  };
+
+  const validateUrl = (url: string) => /^https?:\/\//i.test(url);
+
+  const saveApiOverride = async () => {
+    if (!validateUrl(apiInput)) {
+      Alert.alert('Invalid URL', 'Please enter a valid http(s) URL, e.g. http://192.168.1.10:8000/api');
+      return;
+    }
+    try {
+      setSavingApi(true);
+      await AsyncStorage.setItem('apiBaseUrlOverride', apiInput);
+      api.defaults.baseURL = apiInput;
+      setEffectiveApi(apiInput);
+      setShowDevModal(false);
+      Alert.alert('Applied', 'Backend API base URL updated for this app.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to save API URL override');
+    } finally {
+      setSavingApi(false);
+    }
+  };
+
+  const resetApiOverride = async () => {
+    try {
+      setSavingApi(true);
+      await AsyncStorage.removeItem('apiBaseUrlOverride');
+      api.defaults.baseURL = config.apiBaseUrl;
+      setEffectiveApi(config.apiBaseUrl);
+      setApiInput(config.apiBaseUrl);
+      setShowDevModal(false);
+      Alert.alert('Reset', 'Reverted to default backend API URL.');
+    } catch (e) {
+      Alert.alert('Error', 'Failed to reset API URL override');
+    } finally {
+      setSavingApi(false);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Profile</Text>
       </View>
 
-      <View style={styles.content}>
+      <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.profileSection}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
@@ -83,6 +152,17 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Development</Text>
+          <TouchableOpacity style={styles.menuItem} onPress={openDevModal}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.menuItemText}>Backend API Base URL</Text>
+              <Text style={styles.menuItemSubtext} numberOfLines={1}>{effectiveApi}</Text>
+            </View>
+            <Text style={styles.menuItemArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+
         <TouchableOpacity style={[styles.logoutButton, isLoggingOut && { opacity: 0.7 }]} onPress={handleLogout} disabled={isLoggingOut}>
           {isLoggingOut ? (
             <ActivityIndicator color="#F5F5F5" />
@@ -90,7 +170,7 @@ export default function ProfileScreen() {
             <Text style={styles.logoutButtonText}>Logout</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
 
       {/* Logout confirmation modal */}
       <Modal
@@ -119,6 +199,42 @@ export default function ProfileScreen() {
                 ) : (
                   <Text style={[styles.modalButtonText, styles.modalLogoutText]}>Logout</Text>
                 )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Development: API base URL modal */}
+      <Modal
+        visible={showDevModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDevModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Backend API Base URL</Text>
+            <Text style={styles.modalText}>Enter the full API url including /api.
+            {'\n'}Example: http://192.168.1.100:8000/api</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="http://host:port/api"
+              placeholderTextColor="#777"
+              value={apiInput}
+              onChangeText={setApiInput}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalButton} onPress={() => setShowDevModal(false)} disabled={savingApi}>
+                <Text style={styles.modalButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#3A0C0C', borderWidth: 1, borderColor: '#FF4444' }]} onPress={resetApiOverride} disabled={savingApi}>
+                {savingApi ? <ActivityIndicator color="#F5F5F5" /> : <Text style={[styles.modalButtonText, { color: '#FF4444' }]}>Reset</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, { backgroundColor: '#FF2A2A' }]} onPress={saveApiOverride} disabled={savingApi}>
+                {savingApi ? <ActivityIndicator color="#F5F5F5" /> : <Text style={[styles.modalButtonText, { color: '#F5F5F5' }]}>Save</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -216,6 +332,11 @@ const styles = StyleSheet.create({
     color: '#F5F5F5',
     letterSpacing: 0.5,
   },
+  menuItemSubtext: {
+    fontSize: 12,
+    color: '#9A9A9A',
+    marginTop: 4,
+  },
   menuItemArrow: {
     fontSize: 16,
     color: '#9A9A9A',
@@ -288,5 +409,14 @@ const styles = StyleSheet.create({
   },
   modalLogoutText: {
     color: '#FF4444',
+  },
+  input: {
+    backgroundColor: '#121212',
+    color: '#F5F5F5',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333',
+    marginBottom: 16,
   },
 });
