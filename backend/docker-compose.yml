@@ -1,0 +1,74 @@
+version: "3.9"
+
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    hostname: 0dc0cc161753
+    mac_address: a6:79:54:55:41:e6
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      MINIO_ACCESS_KEY_FILE: access_key
+      MINIO_SECRET_KEY_FILE: secret_key
+      MINIO_ROOT_USER_FILE: access_key
+      MINIO_ROOT_PASSWORD_FILE: secret_key
+      MINIO_KMS_SECRET_KEY_FILE: kms_master_key
+      MINIO_UPDATE_MINISIGN_PUBKEY: RWTx5Zr1tiHQLwG9keckT0c45M3AGeHD6IvimQHpyRywVWGbP1aVSGav
+      MINIO_CONFIG_ENV_FILE: config.env
+      MC_CONFIG_DIR: /tmp/.mc
+    volumes:
+      - /data:/data
+    working_dir: /
+    restart: "no"
+    labels:
+      architecture: "aarch64"
+      build-date: "2025-08-06T08:17:03"
+      com.redhat.component: "ubi9-micro-container"
+      com.redhat.license_terms: "https://www.redhat.com/en/about/red-hat-end-user-license-agreements#UBI"
+      description: "MinIO object storage is fundamentally different. Designed for performance and the S3 API, it is 100% open-source. MinIO is ideal for large, private cloud environments with stringent security requirements and delivers mission-critical availability across a diverse range of workloads."
+      distribution-scope: "public"
+      io.buildah.version: "1.40.1"
+      io.k8s.description: "Very small image which doesn't install the package manager."
+      io.k8s.display-name: "Red Hat Universal Base Image 9 Micro"
+      maintainer: "MinIO Inc <dev@min.io>"
+      name: "MinIO"
+      release: "RELEASE.2025-09-07T16-13-09Z"
+      summary: "MinIO is a High Performance Object Storage, API compatible with Amazon S3 cloud storage service."
+      url: "https://catalog.redhat.com/en/search?searchType=containers"
+      vcs-ref: "32d8e5209f029a1fb7235308ab32253bface1001"
+      vcs-type: "git"
+      vendor: "MinIO Inc <dev@min.io>"
+      version: "RELEASE.2025-09-07T16-13-09Z"
+    command: server /data
+    networks:
+      - bridge_net
+
+  postgres:
+    image: postgres:14
+    container_name: postgres
+    hostname: 20a96dbb8db1
+    mac_address: 72:19:98:c0:04:01
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: stratum_user
+      POSTGRES_PASSWORD: stratum_secure_pass_2025
+      POSTGRES_DB: stratum_db
+      PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/14/bin
+      GOSU_VERSION: "1.19"
+      LANG: en_US.utf8
+      PG_MAJOR: "14"
+      PG_VERSION: "14.19-1.pgdg13+1"
+      PGDATA: /var/lib/postgresql/data
+    volumes:
+      - /var/lib/postgresql/data:/var/lib/postgresql/data
+    restart: "no"
+    networks:
+      - bridge_net
+
+networks:
+  bridge_net:
+    driver: bridge
