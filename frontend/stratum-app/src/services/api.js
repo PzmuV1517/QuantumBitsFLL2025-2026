@@ -2,14 +2,50 @@ import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { config } from '../config/config';
 
+// Helper to resolve the most appropriate base URL at runtime
+const resolveBaseUrl = async () => {
+  try {
+    const override = await AsyncStorage.getItem('apiBaseUrlOverride');
+    const isWeb = typeof window !== 'undefined' && typeof document !== 'undefined';
+    let base = override || (isWeb ? `${window.location.origin}/api` : config.apiBaseUrl);
+
+    // Prevent mixed content on HTTPS pages by upgrading scheme when pointing to same host
+    if (isWeb && window.location.protocol === 'https:' && base.startsWith('http://')) {
+      try {
+        const target = new URL(base);
+        const current = new URL(window.location.href);
+        if (target.host === current.host) {
+          base = base.replace('http://', 'https://');
+        }
+      } catch {
+        // If URL parsing fails, leave base as-is
+      }
+    }
+    return base;
+  } catch {
+    return config.apiBaseUrl;
+  }
+};
+
 const api = axios.create({
+  // This initial value will be corrected by the interceptor very early
   baseURL: config.apiBaseUrl,
   timeout: 10000,
 });
 
+// Initialize baseURL from saved override ASAP (best-effort, may race with first requests)
+(async () => {
+  const base = await resolveBaseUrl();
+  api.defaults.baseURL = base;
+})();
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   async (config) => {
+    // Ensure baseURL honors override and production defaults on every request
+    const base = await resolveBaseUrl();
+    config.baseURL = base;
+
     const token = await AsyncStorage.getItem('authToken');
     if (token) {
       config.headers = config.headers || {};
