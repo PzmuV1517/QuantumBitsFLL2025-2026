@@ -34,6 +34,7 @@ Retain original quick items at top:
 - [ ] Input validation hardening (length limits, mime type whitelist for uploads)
 - [ ] Add CORS config validation tests
 - [ ] Security headers middleware (Content-Security-Policy, X-Frame-Options)
+- [ ] Projects can be joined via code/invite link (one time link)
 
 ## 📦 Object Storage / Media
 - [ ] Folder structure convention in MinIO (projects/{id}/notes/{id}/)
@@ -69,6 +70,7 @@ Retain original quick items at top:
 - [ ] Accessibility pass (contrast, VoiceOver / TalkBack labels)
 - [ ] Unified form components (input, textarea, file picker) with validation states
 - [ ] Image & 3D asset preview component
+- [ ] User profile customisation - description, achievements, number of projects worked on, etc
 
 ## 🗺 Archaeology-Specific Features
 - [ ] GIS / geotagging for finds (lat/long, site code)
