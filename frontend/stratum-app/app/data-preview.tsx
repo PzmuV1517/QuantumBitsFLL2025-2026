@@ -7,6 +7,7 @@ import TextFilePanel from '../src/components/data/TextFilePanel';
 import CsvPanel from '../src/components/data/CsvPanel';
 import ExcelPanel from '../src/components/data/ExcelPanel';
 import PdfPanel from '../src/components/data/PdfPanel';
+import api from '../src/services/api';
 
 // Lazy import to avoid native bundling issues
 let Papa: any = null;
@@ -28,7 +29,8 @@ export default function DataPreviewScreen() {
   const [originalTitle, setOriginalTitle] = useState<string>('');
   const [editableTitle, setEditableTitle] = useState<string>('');
   const [isNoteFile, setIsNoteFile] = useState(false);
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null); // web object URL
+  const [pdfFileUri, setPdfFileUri] = useState<string | null>(null); // native file:// URI
   // markdown handled by TextFilePanel
   const gridRef = useRef<any>(null);
   const defaultCols = 1000; // virtual infinite feel
@@ -118,12 +120,41 @@ export default function DataPreviewScreen() {
     (async () => {
       try {
         if (Platform.OS !== 'web') {
-          // Native: keep existing behavior (no inline PDF preview)
+          const ext = (name as string)?.toLowerCase() || '';
+          // Native PDF: download to local cache and preview
+          if (ext.endsWith('.pdf') || kind === 'pdf') {
+            const token = await AsyncStorage.getItem('authToken');
+            const url = `${api.defaults.baseURL}/files/${nodeId}/download`;
+            // Try react-native-blob-util first (best for binary + file path)
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              const RNBlob = require('react-native-blob-util').default;
+              const res = await RNBlob.config({ fileCache: true, appendExt: 'pdf' }).fetch('GET', url, token ? { Authorization: `Bearer ${token}` } : {});
+              const path: string = res.path();
+              if (!cancelled) setPdfFileUri(path.startsWith('file://') ? path : `file://${path}`);
+              return;
+            } catch (e) {
+              // Fallback to expo-file-system if available
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-var-requires
+                const FS = require('expo-file-system');
+                const target = `${FS.cacheDirectory}doc-${nodeId}.pdf`;
+                const dl = await FS.downloadAsync(url, target, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!cancelled) setPdfFileUri(dl.uri);
+                return;
+              } catch (e2) {
+                console.warn('No native PDF download module available', e2);
+                setError('PDF preview is not available on this device. Please use Download.');
+                return;
+              }
+            }
+          }
+
+          // Non-PDF native fallback: load as text (best-effort)
           const res = await fileService.downloadFile(nodeId);
           const reader = new FileReader();
           reader.onloadend = () => {
             if (!cancelled) {
-              // For native we won’t preview PDFs; leave as-is for txt/csv fallback usage
               const content = typeof reader.result === 'string' ? reader.result : '';
               setTextContent(content);
             }
@@ -310,14 +341,27 @@ export default function DataPreviewScreen() {
     }
   };
 
-  // Revoke PDF URL when it changes/unmounts
+  // Revoke / cleanup PDF resources when it changes/unmounts
   useEffect(() => {
     return () => {
       if (Platform.OS === 'web' && pdfUrl) {
         try { window.URL.revokeObjectURL(pdfUrl); } catch {}
       }
+      if (Platform.OS !== 'web' && pdfFileUri) {
+        // Best-effort cleanup
+        try {
+          const maybeBlob = (() => { try { return require('react-native-blob-util'); } catch { return null; } })();
+          if (maybeBlob && maybeBlob.fs && pdfFileUri.startsWith('file://')) {
+            const p = pdfFileUri.replace('file://', '');
+            maybeBlob.fs.unlink(p).catch(() => {});
+          } else {
+            const FS = (() => { try { return require('expo-file-system'); } catch { return null; } })();
+            if (FS && FS.deleteAsync) FS.deleteAsync(pdfFileUri, { idempotent: true }).catch(() => {});
+          }
+        } catch {}
+      }
     };
-  }, [pdfUrl]);
+  }, [pdfUrl, pdfFileUri]);
 
   const header = useMemo(() => {
     const ext = (name as string)?.toLowerCase() || '';
@@ -360,7 +404,11 @@ export default function DataPreviewScreen() {
           )}
           {!loading && !error && (
             isPdf ? (
-              <PdfPanel src={pdfUrl} />
+              Platform.OS === 'web' ? (
+                <PdfPanel src={pdfUrl} />
+              ) : (
+                <PdfPanel fileUri={pdfFileUri} />
+              )
             ) : table ? (
               (() => {
                 const ext = (name as string)?.toLowerCase() || '';

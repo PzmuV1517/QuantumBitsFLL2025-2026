@@ -2,7 +2,8 @@ import React from 'react';
 import { Platform, View, Text, StyleSheet } from 'react-native';
 
 interface Props {
-  src: string | null; // object URL or data URI for PDF
+  src?: string | null;      // web: object URL or data URI for PDF
+  fileUri?: string | null;  // native: file:// URI (ignored on web)
 }
 
 export default function PdfPanel({ src }: Props) {
