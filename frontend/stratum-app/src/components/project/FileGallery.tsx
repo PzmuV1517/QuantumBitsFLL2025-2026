@@ -21,6 +21,7 @@ export default function FileGallery({ projectId, onOpenItem }: { projectId: stri
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [FaListIcon, setFaListIcon] = useState<React.ComponentType<{ color?: string; size?: number }> | null>(null);
   const [IoGridIcon, setIoGridIcon] = useState<React.ComponentType<{ color?: string; size?: number }> | null>(null);
+  const [FaRegFileIcon, setFaRegFileIcon] = useState<React.ComponentType<{ color?: string; size?: number }> | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -43,7 +44,10 @@ export default function FileGallery({ projectId, onOpenItem }: { projectId: stri
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     import('react-icons/fa')
-      .then((mod) => setFaListIcon(() => mod.FaList))
+      .then((mod) => {
+        setFaListIcon(() => mod.FaList);
+        setFaRegFileIcon(() => mod.FaRegFile);
+      })
       .catch(() => {});
     import('react-icons/io5')
       .then((mod) => setIoGridIcon(() => mod.IoGridOutline))
@@ -102,7 +106,11 @@ export default function FileGallery({ projectId, onOpenItem }: { projectId: stri
                 {group.items.map((node) => (
                   <TouchableOpacity key={node.id} style={styles.tile} onPress={() => onOpenItem(node)}>
                     <View style={styles.thumb}>
-                      <Text style={styles.icon}>{iconFor(node)}</Text>
+                      {Platform.OS === 'web' && FaRegFileIcon ? (
+                        <FaRegFileIcon color="#F5F5F5" size={24} />
+                      ) : (
+                        <Text style={styles.icon}>{iconFor(node)}</Text>
+                      )}
                     </View>
                     <Text style={styles.name} numberOfLines={2}>{node.name}</Text>
                   </TouchableOpacity>
