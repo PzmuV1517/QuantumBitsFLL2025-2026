@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Image, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { fileService } from '../src/services/fileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PhotoPanel from '../src/components/data/PhotoPanel';
 
 export default function ImagePreviewScreen() {
   const { nodeId, name } = useLocalSearchParams<{ nodeId: string; name: string }>();
@@ -85,11 +86,7 @@ export default function ImagePreviewScreen() {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
-        {!loading && !error && blobUrl && (
-          <View style={styles.imageWrapper}>
-            <Image source={{ uri: blobUrl }} style={styles.image} resizeMode="contain" />
-          </View>
-        )}
+        {!loading && !error && blobUrl && <PhotoPanel uri={blobUrl} />}
       </View>
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={handleDownload} disabled={!blobUrl}>
@@ -109,8 +106,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#9A9A9A' },
   errorText: { color: '#FF4444', fontSize: 16 },
-  imageWrapper: { flex: 1, borderRadius: 16, overflow: 'hidden', backgroundColor: '#000', borderWidth: 1, borderColor: '#2A2A2A', justifyContent: 'center', alignItems: 'center' },
-  image: { width: '100%', height: '100%' },
   actions: { flexDirection: 'row', gap: 12, padding: 16 },
   actionButton: { flex: 1, backgroundColor: '#2A2A2A', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   closeButton: { backgroundColor: '#1A1A1A' },
