@@ -3,17 +3,15 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert, Pla
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { fileService } from '../src/services/fileService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import TextFilePanel from '../src/components/data/TextFilePanel';
+import CsvPanel from '../src/components/data/CsvPanel';
+import ExcelPanel from '../src/components/data/ExcelPanel';
 
 // Lazy import to avoid native bundling issues
 let Papa: any = null;
 let XLSX: any = null;
 let AutoSizer: any = null;
 let VariableSizeGrid: any = null;
-let ReactMarkdown: any = null;
-let remarkGfm: any = null;
-let remarkMath: any = null;
-let rehypeKatex: any = null;
-let rehypeRaw: any = null;
 
 export default function DataPreviewScreen() {
   const { nodeId, name, kind } = useLocalSearchParams<{ nodeId: string; name: string; kind?: string }>();
@@ -29,7 +27,7 @@ export default function DataPreviewScreen() {
   const [originalTitle, setOriginalTitle] = useState<string>('');
   const [editableTitle, setEditableTitle] = useState<string>('');
   const [isNoteFile, setIsNoteFile] = useState(false);
-  const [markdownReady, setMarkdownReady] = useState(false);
+  // markdown handled by TextFilePanel
   const gridRef = useRef<any>(null);
   const defaultCols = 1000; // virtual infinite feel
   const defaultRows = 1000;
@@ -137,37 +135,7 @@ export default function DataPreviewScreen() {
             if (ext.endsWith('.txt') || ext.endsWith('.md')) {
             const text = await blob.text();
             setTextContent(text);
-            // Pre-load markdown renderer for .md files so we render, not plaintext
-            if (ext.endsWith('.md')) {
-                // Load core libs first
-                try {
-                  if (!ReactMarkdown) ReactMarkdown = (await import('react-markdown')).default;
-                } catch (err) {
-                  console.error('Failed to load react-markdown', err);
-                }
-                try {
-                  if (!remarkGfm) remarkGfm = (await import('remark-gfm')).default;
-                } catch (err) {
-                  console.error('Failed to load remark-gfm', err);
-                }
-                // Try optional plugins one by one; if they fail, continue without them
-                try {
-                  if (!rehypeRaw) rehypeRaw = (await import('rehype-raw')).default;
-                } catch (err) {
-                  console.warn('rehype-raw not available, HTML in markdown will be skipped.');
-                }
-                try {
-                  if (!remarkMath) remarkMath = (await import('remark-math')).default;
-                } catch (err) {
-                  console.warn('remark-math not available, math will not render.');
-                }
-                try {
-                  if (!rehypeKatex) rehypeKatex = (await import('rehype-katex')).default;
-                } catch (err) {
-                  console.warn('rehype-katex not available, math rendering will be disabled.');
-                }
-                setMarkdownReady(Boolean(ReactMarkdown));
-            }
+            // Markdown preloading now moved into MarkdownView/TextFilePanel
             
             // Check if this is a note file (by checking if it's a txt file, which might be a note)
             // We'll assume txt files could be notes and allow title editing
@@ -371,208 +339,30 @@ export default function DataPreviewScreen() {
         )}
         {!loading && !error && (
           table ? (
-            Platform.OS === 'web' && gridReady && AutoSizer && VariableSizeGrid ? (
-              <View style={{ flex: 1, minHeight: 0 }}>
-                <AutoSizer>
-                  {({ width, height }: any) => (
-                    <View style={{ width, height }}>
-                      {/* Column header (render only visible range) */}
-                      <View style={{ flexDirection: 'row' }}>
-                        <View style={[styles.headerCell, { width: rowHeaderWidth, height: rowHeightPx }]} />
-                        <View style={{ width: width - rowHeaderWidth, height: rowHeightPx, overflow: 'hidden' }}>
-                          {(() => {
-                            const visibleCols = Math.ceil((width - rowHeaderWidth) / colWidthPx) + 1;
-                            const startCol = Math.floor(gridScroll.left / colWidthPx);
-                            const offsetX = -(gridScroll.left % colWidthPx);
-                            const cells = [] as any[];
-                            for (let c = startCol; c < Math.min(defaultCols, startCol + visibleCols); c++) {
-                              cells.push(
-                                <View key={c} style={[styles.headerCell, { width: colWidthPx, height: rowHeightPx }]}>
-                                  <Text style={styles.headerText}>{c + 1}</Text>
-                                </View>
-                              );
-                            }
-                            return <View style={{ flexDirection: 'row', transform: [{ translateX: offsetX }] }}>{cells}</View>;
-                          })()}
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', flex: 1, minHeight: 0 }}>
-                        {/* Row header (render only visible range) */}
-                        <View style={{ width: rowHeaderWidth, overflow: 'hidden' }}>
-                          {(() => {
-                            const visibleRows = Math.ceil((height - rowHeightPx) / rowHeightPx) + 1;
-                            const startRow = Math.floor(gridScroll.top / rowHeightPx);
-                            const offsetY = -(gridScroll.top % rowHeightPx);
-                            const rows = [] as any[];
-                            for (let r = startRow; r < Math.min(defaultRows, startRow + visibleRows); r++) {
-                              rows.push(
-                                <View key={r} style={[styles.headerCell, { height: rowHeightPx }]}>
-                                  <Text style={styles.headerText}>{r + 1}</Text>
-                                </View>
-                              );
-                            }
-                            return <View style={{ transform: [{ translateY: offsetY }] }}>{rows}</View>;
-                          })()}
-                        </View>
-                        {/* Grid */}
-                        <View style={{ flex: 1 }}>
-                          <VariableSizeGrid
-                            ref={gridRef}
-                            columnCount={defaultCols}
-                            rowCount={defaultRows}
-                            columnWidth={() => colWidthPx}
-                            rowHeight={() => rowHeightPx}
-                            width={width - rowHeaderWidth}
-                            height={height - rowHeightPx}
-                            itemKey={({ columnIndex, rowIndex }: any) => `${rowIndex}:${columnIndex}`}
-                            onScroll={({ scrollLeft, scrollTop }: any) => {
-                              setGridScroll((prev) => ({ ...prev, left: scrollLeft, top: scrollTop, width, height }));
-                            }}
-                          >
-                            {({ columnIndex, rowIndex, style }: any) => {
-                              const r = rowIndex;
-                              const c = columnIndex;
-                              const value = table?.[r]?.[c] ?? '';
-                              const webPreWrap = Platform.OS === 'web' ? ({ whiteSpace: 'pre-wrap' } as any) : undefined;
-                              return (
-                                <View style={[styles.tableCell, style]}>
-                                  {editing ? (
-                                    <TextInput
-                                      style={[styles.cellInput, Platform.OS === 'web' ? ({ fontFamily: 'monospace' } as any) : undefined]}
-                                      multiline
-                                      value={String(value)}
-                                      onFocus={() => ensureSize(r, c)}
-                                      onChangeText={(txt) => {
-                                        setTable((prev) => {
-                                          if (!prev) return prev;
-                                          const next = prev.map((row) => row.slice());
-                                          while (next.length <= r) next.push([] as any);
-                                          const row = next[r] ? next[r].slice() : [];
-                                          while (row.length <= c) row.push('');
-                                          row[c] = txt;
-                                          next[r] = row;
-                                          return next;
-                                        });
-                                        setDirty(true);
-                                      }}
-                                      onPressIn={() => {
-                                        // If value is empty, allocate immediately so cursor shows up
-                                        if (!value) ensureSize(r, c);
-                                      }}
-                                    />
-                                  ) : (
-                                    <Text style={[styles.cellText, webPreWrap]}>{wrap15(value)}</Text>
-                                  )}
-                                </View>
-                              );
-                            }}
-                          </VariableSizeGrid>
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </AutoSizer>
-              </View>
-            ) : (
-              <View style={[styles.tableWrapper, { padding: 8 }] }>
-                <View>
-                  {table.slice(0, 200).map((row, rIdx) => (
-                    <View key={rIdx} style={styles.tableRow}>
-                      {row.map((cell, cIdx) => {
-                        const cellWidthOverride = Platform.OS === 'web' ? ({ width: '15ch' } as any) : { width: 120 };
-                        const webPreWrap = Platform.OS === 'web' ? ({ whiteSpace: 'pre-wrap' } as any) : undefined;
-                        return (
-                          <View key={cIdx} style={[styles.tableCell, cellWidthOverride]}>
-                            {editing ? (
-                              <TextInput
-                              style={[styles.cellInput, Platform.OS === 'web' ? ({ fontFamily: 'monospace' } as any) : undefined]}
-                              multiline
-                              value={String(cell ?? '')}
-                              onChangeText={(txt) => {
-                                setTable((prev) => {
-                                  if (!prev) return prev;
-                                  const next = prev.map((r) => r.slice());
-                                  next[rIdx][cIdx] = txt;
-                                  return next;
-                                });
-                                setDirty(true);
-                              }}
-                            />
-                            ) : (
-                              <Text style={[styles.cellText, webPreWrap]}>{wrap15(cell)}</Text>
-                            )}
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ))}
-                  {table.length > 200 && (
-                    <Text style={styles.moreText}>Showing first 200 rows…</Text>
-                  )}
-                </View>
-              </View>
-            )
-          ) : (
-            <View style={styles.textWrapper}>
-              {/* Title editor for note files */}
-              {editing && isNoteFile && (
-                <View style={styles.titleEditor}>
-                  <Text style={styles.titleLabel}>Note Title:</Text>
-                  <TextInput
-                    style={[
-                      styles.titleInput,
-                      Platform.OS === 'web' ? ({ outline: 'none' } as any) : undefined
-                    ]}
-                    value={editableTitle}
-                    onChangeText={(text) => {
-                      setEditableTitle(text);
-                      setDirty(true);
-                    }}
-                    placeholder="Enter note title..."
-                    placeholderTextColor="#666"
-                  />
-                </View>
-              )}
-              
-              {editing ? (
-                <TextInput
-                  style={[
-                    styles.textEditor,
-                    Platform.OS === 'web' ? ({ fontFamily: 'monospace', outline: 'none' } as any) : undefined
-                  ]}
-                  multiline
-                  value={textContent || ''}
-                  onChangeText={(text) => {
-                    setTextContent(text);
-                    setDirty(true);
-                  }}
-                  placeholder="Start typing..."
-                  placeholderTextColor="#666"
+            (() => {
+              const ext = (name as string)?.toLowerCase() || '';
+              const isCsv = ext.endsWith('.csv') || kind === 'csv';
+              const Panel = isCsv ? CsvPanel : ExcelPanel;
+              return (
+                <Panel
+                  table={table}
+                  setTable={(updater: any) => setTable((prev) => updater(prev || [] as any) as any)}
+                  editing={editing}
+                  onDirty={() => setDirty(true)}
                 />
-              ) : (
-                <ScrollView style={styles.viewWrapper} contentContainerStyle={styles.viewContent}>
-                  {(() => {
-                    const ext = (name as string)?.toLowerCase() || '';
-                    if (ext.endsWith('.md') && Platform.OS === 'web' && markdownReady && ReactMarkdown) {
-                      return (
-                        <View style={{ width: '100%' }}>
-                          <ReactMarkdown
-                            className="markdown-body"
-                            remarkPlugins={[remarkGfm, remarkMath]}
-                            rehypePlugins={[rehypeRaw, rehypeKatex]}
-                            skipHtml={false}
-                          >
-                            {textContent || ''}
-                          </ReactMarkdown>
-                        </View>
-                      );
-                    }
-                    // default plain text rendering for non-markdown or while loading
-                    return <Text style={styles.preText}>{textContent || 'No content to display'}</Text>;
-                  })()}
-                </ScrollView>
-              )}
-            </View>
+              );
+            })()
+          ) : (
+            <TextFilePanel
+              editing={editing}
+              isNoteFile={isNoteFile}
+              editableTitle={editableTitle}
+              setEditableTitle={(t) => { setEditableTitle(t); setDirty(true); }}
+              textContent={textContent || ''}
+              setTextContent={(t) => { setTextContent(t); setDirty(true); }}
+              filename={(name as string) || ''}
+              onDirty={() => setDirty(true)}
+            />
           )
         )}
         </View>
@@ -616,51 +406,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { marginTop: 12, color: '#9A9A9A' },
   errorText: { color: '#FF4444', fontSize: 16 },
-  tableWrapper: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', backgroundColor: '#0E0E0E' },
-  tableVertical: { maxHeight: '100%' },
-  tableRow: { flexDirection: 'row' },
-  tableCell: { paddingVertical: 4, paddingHorizontal: 6, borderRightWidth: 1, borderRightColor: '#2A2A2A', borderBottomWidth: 1, borderBottomColor: '#2A2A2A', width: 160 },
-  cellText: { color: '#EAEAEA', fontFamily: Platform.select({ web: 'monospace', default: undefined }), fontSize: 12, lineHeight: 14 },
-  cellInput: { color: '#EAEAEA', paddingVertical: 2, paddingHorizontal: 4, borderWidth: 1, borderColor: '#333', borderRadius: 4, minHeight: 24, backgroundColor: '#151515', fontSize: 12 },
-  moreText: { color: '#9A9A9A', padding: 8 },
-  textWrapper: { flex: 1, borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', backgroundColor: '#0E0E0E', padding: 12 },
-  viewWrapper: { flex: 1 },
-  viewContent: { flexGrow: 1 },
-  preText: { color: '#EAEAEA', fontFamily: Platform.select({ web: 'monospace', default: undefined }), lineHeight: 20 },
-  textEditor: { 
-    color: '#EAEAEA', 
-    fontFamily: Platform.select({ web: 'monospace', default: undefined }), 
-    fontSize: 14, 
-    lineHeight: 20, 
-    flex: 1,
-    textAlignVertical: 'top',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    padding: 0
-  },
-  titleEditor: {
-    marginBottom: 16,
-    paddingBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A'
-  },
-  titleLabel: {
-    color: '#F5F5F5',
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8
-  },
-  titleInput: {
-    color: '#EAEAEA',
-    fontSize: 16,
-    backgroundColor: '#1A1A1A',
-    borderWidth: 1,
-    borderColor: '#333',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontWeight: '500'
-  },
+  // table/text styles moved into components
   actions: { flexDirection: 'row', gap: 12, padding: 16 },
   actionButton: { flex: 1, backgroundColor: '#2A2A2A', padding: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#333' },
   closeButton: { backgroundColor: '#1A1A1A' },
