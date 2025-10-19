@@ -13,7 +13,7 @@ export default function NotesSection({ notes, onCreateNote, onNotePress }: { not
     <TouchableOpacity style={styles.noteCard} onPress={() => onNotePress(item.id)}>
       <View style={styles.noteHeader}>
         <Text style={styles.noteTitle} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.noteDate}>{new Date(item.updated_at).toLocaleDateString()}</Text>
+  <Text style={styles.noteDate}>{new Date(item.updated_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</Text>
       </View>
       {!!item.content && <Text style={styles.notePreview} numberOfLines={2}>{item.content}</Text>}
     </TouchableOpacity>

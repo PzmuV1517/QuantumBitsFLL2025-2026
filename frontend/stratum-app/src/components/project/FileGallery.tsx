@@ -161,7 +161,11 @@ async function fetchAllProjectFiles(projectId: string): Promise<FileNode[]> {
 
 function groupFiles(files: FileNode[], mode: Mode) {
   const groups = new Map<string, { label: string; dateKey: number; items: FileNode[] }>();
-  const toDate = (n: FileNode) => new Date(n?.created_at || n?.updated_at || Date.now());
+  // Only derive a date from persisted timestamps; avoid Date.now() which is unstable across server/client
+  const toDate = (n: FileNode) => {
+    const ts = n?.created_at || n?.updated_at;
+    return ts ? new Date(ts) : null;
+  };
 
   const startOfWeek = (d: Date) => {
     const tmp = new Date(d);
@@ -175,22 +179,28 @@ function groupFiles(files: FileNode[], mode: Mode) {
 
   for (const n of files) {
     const d = toDate(n);
+    if (!d) {
+      const key = 'UNKNOWN';
+      if (!groups.has(key)) groups.set(key, { label: 'Unknown date', dateKey: -Infinity, items: [] });
+      groups.get(key)!.items.push(n);
+      continue;
+    }
     let key = '';
     let label = '';
     let sortDate = 0;
     if (mode === 'day') {
       key = d.toISOString().slice(0, 10);
-      label = d.toLocaleDateString();
+      label = d.toLocaleDateString(undefined, { timeZone: 'UTC' });
       sortDate = new Date(key).getTime();
     } else if (mode === 'week') {
       const s = startOfWeek(d);
       key = `W:${s.toISOString().slice(0, 10)}`;
-      label = `Week of ${s.toLocaleDateString()}`;
+      label = `Week of ${s.toLocaleDateString(undefined, { timeZone: 'UTC' })}`;
       sortDate = s.getTime();
     } else {
       const s = startOfMonth(d);
       key = `M:${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}`;
-      label = `${s.toLocaleString(undefined, { month: 'long' })} ${s.getFullYear()}`;
+      label = `${s.toLocaleString('en-US', { month: 'long', timeZone: 'UTC' })} ${s.getFullYear()}`;
       sortDate = s.getTime();
     }
     if (!groups.has(key)) groups.set(key, { label, dateKey: sortDate, items: [] });

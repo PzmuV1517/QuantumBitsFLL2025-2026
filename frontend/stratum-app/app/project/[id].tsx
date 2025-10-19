@@ -319,7 +319,7 @@ export default function ProjectDetailScreen() {
       <View style={styles.noteHeader}>
         <Text style={styles.noteTitle} numberOfLines={1}>{item.title}</Text>
         <Text style={styles.noteDate}>
-          {new Date(item.updated_at).toLocaleDateString()}
+          {new Date(item.updated_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}
         </Text>
       </View>
       {item.content && (
