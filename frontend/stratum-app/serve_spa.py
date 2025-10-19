@@ -8,7 +8,7 @@ DIRECTORY = pathlib.Path(__file__).parent
 
 class SPARequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
-        path = DIRECTORY / self.path.lstrip("/")
+        path = DIRECTORY / self.path.lstrip("/dist")
         if path.is_file():
             return super().do_GET()
         else:
