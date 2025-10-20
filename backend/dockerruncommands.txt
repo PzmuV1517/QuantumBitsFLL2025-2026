@@ -3,3 +3,5 @@ docker run --hostname=0dc0cc161753 --mac-address=a6:79:54:55:41:e6 --env=PATH=/u
 docker run --hostname=20a96dbb8db1 --mac-address=72:19:98:c0:04:01 --env=POSTGRES_USER=stratum_user --env=POSTGRES_PASSWORD=stratum_secure_pass_2025 --env=POSTGRES_DB=stratum_db --env=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/lib/postgresql/14/bin --env=GOSU_VERSION=1.19 --env=LANG=en_US.utf8 --env=PG_MAJOR=14 --env=PG_VERSION=14.19-1.pgdg13+1 --env=PGDATA=/var/lib/postgresql/data --volume=/var/lib/postgresql/data --network=bridge -p 5432:5432 --restart=no --runtime=runc -d postgres:14
 
 python -m uvicorn app.main:app --reload --port 8000
+
+npx -y eas-cli build -p android --profile production --non-interactive --no-wait
