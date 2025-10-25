@@ -67,6 +67,8 @@ export default function RegisterScreen() {
             placeholderTextColor="#4A4A4A"
             value={displayName}
             onChangeText={setDisplayName}
+            autoComplete="name"
+            textContentType="name"
           />
         </View>
 
@@ -80,6 +82,8 @@ export default function RegisterScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
           />
         </View>
 
@@ -93,6 +97,8 @@ export default function RegisterScreen() {
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
+              autoComplete="new-password"
+              textContentType="newPassword"
             />
             <TouchableOpacity
               style={styles.passwordToggle}
@@ -123,6 +129,8 @@ export default function RegisterScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry={!showConfirmPassword}
+              autoComplete="new-password"
+              textContentType="newPassword"
             />
             <TouchableOpacity
               style={styles.passwordToggle}
