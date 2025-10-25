@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { FaEyeSlash } from "react-icons/fa";
+import { FaEye } from "react-icons/fa";
 import {
   View,
   Text,
@@ -9,6 +11,8 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 
@@ -16,6 +20,8 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
@@ -79,26 +85,62 @@ export default function RegisterScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>PASSWORD</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="At least 6 characters"
-            placeholderTextColor="#4A4A4A"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="At least 6 characters"
+              placeholderTextColor="#4A4A4A"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {Platform.OS === 'web' ? (
+                showPassword ? (
+                  <FaEyeSlash size={18} color="#FF2A2A" />
+                ) : (
+                  <FaEye size={18} color="#FF2A2A" />
+                )
+              ) : (
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#FF2A2A" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>CONFIRM PASSWORD</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Re-enter password"
-            placeholderTextColor="#4A4A4A"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Re-enter password"
+              placeholderTextColor="#4A4A4A"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowConfirmPassword((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={showConfirmPassword ? 'Hide password' : 'Show password'}
+            >
+              {Platform.OS === 'web' ? (
+                showConfirmPassword ? (
+                  <FaEyeSlash size={18} color="#FF2A2A" />
+                ) : (
+                  <FaEye size={18} color="#FF2A2A" />
+                )
+              ) : (
+                <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={20} color="#FF2A2A" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -171,6 +213,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#F5F5F5',
     letterSpacing: 0.5
+  },
+  inputWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   button: {
     backgroundColor: '#FF2A2A',
