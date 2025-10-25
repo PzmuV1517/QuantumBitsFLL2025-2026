@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { FaEyeSlash } from 'react-icons/fa';
+import { FaEye } from 'react-icons/fa';
 import {
   View,
   Text,
@@ -8,7 +10,9 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { useAuth } from '../../src/contexts/AuthContext';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -18,6 +22,7 @@ import { config } from '../../src/config/config';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const [showDevModal, setShowDevModal] = useState(false);
@@ -101,19 +106,42 @@ export default function LoginScreen() {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>PASSWORD</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Enter your password"
-            placeholderTextColor="#4A4A4A"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              style={[styles.input, styles.passwordInput]}
+              placeholder="Enter your password"
+              placeholderTextColor="#4A4A4A"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="current-password"
+              textContentType="password"
+            />
+            <TouchableOpacity
+              style={styles.passwordToggle}
+              onPress={() => setShowPassword((v) => !v)}
+              disabled={loading}
+              accessibilityRole="button"
+              accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+            >
+              {Platform.OS === 'web' ? (
+                showPassword ? (
+                  <FaEyeSlash size={18} color="#FF2A2A" />
+                ) : (
+                  <FaEye size={18} color="#FF2A2A" />
+                )
+              ) : (
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color="#FF2A2A" />
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <TouchableOpacity
@@ -175,7 +203,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#111111',
@@ -220,6 +248,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#F5F5F5',
     letterSpacing: 0.5
+  },
+  inputWrapper: {
+    position: 'relative',
+    justifyContent: 'center',
+  },
+  passwordInput: {
+    paddingRight: 48,
+  },
+  passwordToggle: {
+    position: 'absolute',
+    right: 12,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   button: {
     backgroundColor: '#FF2A2A',

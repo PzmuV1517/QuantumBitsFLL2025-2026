@@ -3,6 +3,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
 
@@ -38,6 +39,32 @@ function RootLayoutNav() {
       router.replace('/(tabs)');
     }
   }, [user, loading, segments]);
+
+  // Web-only: keep dark inputs even when browser autofill applies
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const STYLE_ID = 'stratum-autofill-dark';
+    if (document.getElementById(STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = STYLE_ID;
+    style.textContent = `
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      textarea:-webkit-autofill,
+      textarea:-webkit-autofill:hover,
+      textarea:-webkit-autofill:focus,
+      select:-webkit-autofill,
+      select:-webkit-autofill:hover,
+      select:-webkit-autofill:focus {
+        -webkit-text-fill-color: #F5F5F5 !important;
+        caret-color: #FF2A2A !important;
+        transition: background-color 9999s ease-in-out 0s !important;
+        box-shadow: 0 0 0px 1000px #111111 inset !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }, []);
 
   return (
     <ThemeProvider value={StratumDarkTheme}>
