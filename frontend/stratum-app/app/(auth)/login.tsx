@@ -14,6 +14,7 @@ import { useAuth } from '../../src/contexts/AuthContext';
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
 
@@ -61,9 +62,19 @@ export default function LoginScreen() {
             placeholderTextColor="#4A4A4A"
             value={password}
             onChangeText={setPassword}
-            secureTextEntry
+            secureTextEntry={!showPassword}
           />
         </View>
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => setShowPassword((v) => !v)}
+          disabled={loading}
+        >
+          <Text style={styles.secondaryButtonText}>
+            {showPassword ? 'HIDE PASSWORD' : 'SHOW PASSWORD'}
+          </Text>
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.button}
@@ -148,11 +159,26 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8
   },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    padding: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#FF2A2A',
+  },
   buttonText: {
     color: '#F5F5F5',
     fontSize: 16,
     fontWeight: '600',
     letterSpacing: 0.5
+  },
+  secondaryButtonText: {
+    color: '#FF2A2A',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.5,
   },
   footer: {
     flexDirection: 'row',
