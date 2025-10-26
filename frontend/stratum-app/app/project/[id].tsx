@@ -66,7 +66,7 @@ export default function ProjectDetailScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'gallery' | 'notes'>('notes');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'notes'>('gallery');
   const [fileNodes, setFileNodes] = useState<any[]>([]);
   const [currentFolder, setCurrentFolder] = useState<{ id: string | null; name: string } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
