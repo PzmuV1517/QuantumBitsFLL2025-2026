@@ -77,7 +77,21 @@ export default function ArtefactDetail() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#111' }}>
-      <Stack.Screen options={{ title: meta?.name ? `${meta.name} #${meta.number}` : 'Artefact', headerTintColor: '#FF2A2A', headerStyle: { backgroundColor: '#111' } }} />
+      <Stack.Screen 
+        options={{ 
+          title: meta?.name ? `${meta.name} #${meta.number ?? '—'}` : 'Artefact',
+          headerStyle: { backgroundColor: '#111111' },
+          headerTintColor: '#FF2A2A',
+          headerTitleStyle: { 
+            color: '#F5F5F5',
+            fontSize: 18,
+            fontWeight: '600'
+          },
+          headerBackTitle: 'Project',
+          headerShown: true,
+          presentation: 'card',
+        }} 
+      />
       {loading ? (
         <View style={styles.center}><ActivityIndicator color="#FF2A2A" /><Text style={{ color: '#9A9A9A', marginTop: 8 }}>Loading…</Text></View>
       ) : (
@@ -92,10 +106,6 @@ export default function ArtefactDetail() {
               </View>
             )}
             <View style={styles.heroOverlay} />
-            <View style={styles.heroContent}>
-              <Text style={styles.heroTitle} numberOfLines={1}>{meta?.name || 'Artefact'}</Text>
-              <Text style={styles.heroSubtitle}>#{meta?.number ?? '—'}</Text>
-            </View>
           </View>
 
           <View style={styles.contentPad}>
@@ -173,7 +183,7 @@ const styles = StyleSheet.create({
   preview: { width: '100%', aspectRatio: 1.6, borderRadius: 10, overflow: 'hidden', backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center' },
   previewEmpty: { borderWidth: 1, borderColor: '#2A2A2A' },
   thumbSmall: { width: 72, height: 72, borderRadius: 10, overflow: 'hidden', backgroundColor: '#0A0A0A', alignItems: 'center', justifyContent: 'center' },
-  hero: { width: '100%', aspectRatio: 2.6, position: 'relative' },
+  hero: { width: '100%', aspectRatio: 3.4, position: 'relative' },
   heroImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   heroOverlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' },
   heroContent: { position: 'absolute', left: 16, right: 16, bottom: 12 },
