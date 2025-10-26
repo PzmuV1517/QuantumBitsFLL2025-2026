@@ -53,12 +53,12 @@ erDiagram
   FILE_NODES {
     string id PK
     string project_id FK
-    string parent_id FK (self)
+    string parent_id FK
     string name
-    enum type  // folder | file | note
+    enum type
     string mime_type
     string size
-    string storage_path // MinIO object key
+    string storage_path
     bool is_locked
     datetime created_at
     datetime updated_at
@@ -73,7 +73,7 @@ erDiagram
     string id PK
     string note_id FK
     string filename
-    string file_path  // MinIO object key
+    string file_path
     string file_type
     string file_size
     datetime uploaded_at
@@ -96,23 +96,22 @@ Notes:
 - `FILE_NODES.parent_id` forms a tree (folders/files). Unique constraint ensures unique sibling names per parent.
 - `NOTE_FILE_LINKS` creates a 1:1 mapping between a logical Note and its backing `.txt` file stored as a `FILE_NODE` pointing to MinIO.
 - `NOTE_ATTACHMENTS.file_path` also points to MinIO objects.
+- `FILE_NODES.type` is one of: folder | file | note.
+- `FILE_NODES.storage_path` and `NOTE_ATTACHMENTS.file_path` are MinIO object keys.
 
 ## MinIO object structure
 
 ```mermaid
 flowchart LR
-  subgraph BUCKET[Bucket: stratum-files]
-    A[files/{project_id}/{uuid}]:::obj
-    B[notes/{project_id}/{note_id}.txt]:::obj
-    C[notes/{note_id}/{uuid}.{ext}]:::obj
+  subgraph BUCKET
+    A["files/{project_id}/{uuid}"]
+    B["notes/{project_id}/{note_id}.txt"]
+    C["notes/{note_id}/{uuid}.{ext}"]
   end
 
-  FN[FILE_NODES.storage_path]:::sql --> A
-  NFL[NOTE_FILE_LINKS -> FILE_NODES.storage_path]:::sql --> B
-  NA[NOTE_ATTACHMENTS.file_path]:::sql --> C
-
-  classDef obj fill:#0b1a1a,stroke:#2aa198,color:#eaeaea,stroke-width:1px;
-  classDef sql fill:#1a0b1a,stroke:#d33682,color:#eaeaea,stroke-width:1px;
+  FN["FILE_NODES.storage_path"] --> A
+  NFL["NOTE_FILE_LINKS -> FILE_NODES.storage_path"] --> B
+  NA["NOTE_ATTACHMENTS.file_path"] --> C
 ```
 
 Mappings and patterns:
