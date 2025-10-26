@@ -318,10 +318,12 @@ export default function ProjectDetailScreen() {
     const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
     const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
     const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json') || node.mime_type === 'application/json';
-    if (isCsv || isExcel || isText) {
-      let kind = 'csv';
+    const isPdf = (node.mime_type === 'application/pdf') || lower.endsWith('.pdf');
+    if (isCsv || isExcel || isText || isPdf) {
+      let kind: string = 'csv';
       if (isExcel) kind = 'excel';
       else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
+      else if (isPdf) kind = 'pdf';
       router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
       return;
     }
@@ -570,15 +572,18 @@ export default function ProjectDetailScreen() {
             const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
             const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
             const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json') || node.mime_type === 'application/json';
-            if (isCsv || isExcel || isText) {
-              let kind = 'csv';
+            const isPdf = (node.mime_type === 'application/pdf') || lower.endsWith('.pdf');
+            if (isCsv || isExcel || isText || isPdf) {
+              let kind: string = 'csv';
               if (isExcel) kind = 'excel';
               else if (isText) kind = lower.endsWith('.md') ? 'markdown' : 'text';
+              else if (isPdf) kind = 'pdf';
               reopenFilesOnReturnRef.current = true;
               setShowFilesOverlay(false);
               router.push({ pathname: '/data-preview', params: { nodeId: node.id, name: node.name, kind } });
               return;
             }
+            Alert.alert('Preview', 'This file type is not yet supported.');
           }}
         />
       </Modal>
