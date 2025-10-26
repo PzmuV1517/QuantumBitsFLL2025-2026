@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { fileService } from '../../services/fileService';
 
 type Mode = 'day' | 'week' | 'month';
@@ -15,6 +15,7 @@ interface FileNode {
 }
 
 export default function FileGallery({ projectId, onOpenItem }: { projectId: string; onOpenItem: (node: FileNode) => void; }) {
+  const { width } = useWindowDimensions();
   const [mode, setMode] = useState<Mode>('day');
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<FileNode[]>([]);
@@ -55,6 +56,13 @@ export default function FileGallery({ projectId, onOpenItem }: { projectId: stri
   }, []);
 
   const groups = useMemo(() => groupFiles(files, mode), [files, mode]);
+
+  // Fixed card sizing and spacing; wrap to next row if it doesn't fit
+  const gridGap = Platform.OS === 'web' ? 8 : 10;
+  const TILE_WIDTH = 145; // px, consistent across sizes
+  const tilePadding = 8;
+  const iconSize = 20;
+  const nameFontSize = 12;
 
   return (
     <View>
@@ -102,17 +110,17 @@ export default function FileGallery({ projectId, onOpenItem }: { projectId: stri
           <View key={group.label + idx} style={{ marginBottom: 24 }}>
             <Text style={styles.groupHeader}>{group.label}</Text>
             {view === 'grid' ? (
-              <View style={styles.grid}>
+              <View style={[styles.grid, { gap: gridGap }] }>
                 {group.items.map((node) => (
-                  <TouchableOpacity key={node.id} style={styles.tile} onPress={() => onOpenItem(node)}>
+                  <TouchableOpacity key={node.id} style={[styles.tile, { width: TILE_WIDTH, padding: tilePadding }]} onPress={() => onOpenItem(node)}>
                     <View style={styles.thumb}>
                       {Platform.OS === 'web' && FaRegFileIcon ? (
-                        <FaRegFileIcon color="#F5F5F5" size={24} />
+                        <FaRegFileIcon color="#F5F5F5" size={iconSize} />
                       ) : (
-                        <Text style={styles.icon}>{iconFor(node)}</Text>
+                        <Text style={[styles.icon, { fontSize: iconSize }]}>{iconFor(node)}</Text>
                       )}
                     </View>
-                    <Text style={styles.name} numberOfLines={2}>{node.name}</Text>
+                    <Text style={[styles.name, { fontSize: nameFontSize }]} numberOfLines={2}>{node.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
