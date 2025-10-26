@@ -16,6 +16,8 @@ interface Props {
   currentFolder: { id: string | null; name: string } | null;
   fileNodes: FileNode[];
   fileLoading: boolean;
+  breadcrumbs?: { id: string | null; name: string }[];
+  onNavigateBreadcrumb?: (index: number) => void;
   onClose: () => void;
   onLoadRoot: () => void;
   onOpenFolder: (node: FileNode) => void;
@@ -28,7 +30,7 @@ interface Props {
   onOpenFile: (node: FileNode) => void;
 }
 
-export default function FilesOverlay({ visible, title = 'Files', currentFolder, fileNodes, fileLoading, onClose, onLoadRoot, onOpenFolder, onUpload, onCreateFolder, onDownload, onRename, onMove, onDelete, onOpenFile }: Props) {
+export default function FilesOverlay({ visible, title = 'Files', currentFolder, fileNodes, fileLoading, breadcrumbs, onNavigateBreadcrumb, onClose, onLoadRoot, onOpenFolder, onUpload, onCreateFolder, onDownload, onRename, onMove, onDelete, onOpenFile }: Props) {
   if (!visible) return null;
   return (
     <View style={styles.root}>
@@ -54,17 +56,23 @@ export default function FilesOverlay({ visible, title = 'Files', currentFolder, 
           <ActivityIndicator color="#FF2A2A" />
         ) : (
           <View>
-            <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center' }}>
-              {currentFolder?.id ? (
-                <TouchableOpacity onPress={onLoadRoot}>
-                  <Text style={{ color: '#FF2A2A', marginRight: 6 }}>Root</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={{ color: '#9A9A9A', marginRight: 6 }}>Root</Text>
-              )}
-              {currentFolder?.id && (
-                <Text style={{ color: '#9A9A9A' }}>/ {currentFolder.name}</Text>
-              )}
+            <View style={{ flexDirection: 'row', marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              {(breadcrumbs && breadcrumbs.length ? breadcrumbs : ([{ id: null, name: 'Root' }, ...(currentFolder ? [currentFolder] : [])]))
+                .map((crumb, idx, arr) => (
+                  <View key={`${crumb.id ?? 'root'}-${idx}`} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    {idx < (arr.length - 1) ? (
+                      <TouchableOpacity onPress={() => {
+                        if (idx === 0) onLoadRoot();
+                        if (onNavigateBreadcrumb) onNavigateBreadcrumb(idx);
+                      }}>
+                        <Text style={{ color: '#FF2A2A' }}>{idx === 0 ? 'Root' : crumb.name}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={{ color: '#9A9A9A' }}>{idx === 0 ? 'Root' : crumb.name}</Text>
+                    )}
+                    {idx < (arr.length - 1) && <Text style={{ color: '#9A9A9A', marginHorizontal: 6 }}>/</Text>}
+                  </View>
+                ))}
             </View>
 
             {fileNodes.length > 0 ? (

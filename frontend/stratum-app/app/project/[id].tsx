@@ -70,6 +70,7 @@ export default function ProjectDetailScreen() {
   const [activeTab, setActiveTab] = useState<'gallery' | 'artefacts' | 'notes'>('gallery');
   const [fileNodes, setFileNodes] = useState<any[]>([]);
   const [currentFolder, setCurrentFolder] = useState<{ id: string | null; name: string } | null>(null);
+  const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([{ id: null, name: 'Root' }]);
   const [fileLoading, setFileLoading] = useState(false);
   const [renameNode, setRenameNode] = useState<any | null>(null);
   const [renameText, setRenameText] = useState('');
@@ -173,6 +174,7 @@ export default function ProjectDetailScreen() {
       const decorated = nodes.map((n: any) => (n.type === 'folder' && n.name === 'Artefacts' ? { ...n, is_locked: true } : n));
       setFileNodes(decorated);
       setCurrentFolder({ id: null as any, name: 'Root' });
+      setBreadcrumbs([{ id: null, name: 'Root' }]);
     } catch (e) {
       console.error('Failed to load files:', e);
     } finally {
@@ -186,8 +188,32 @@ export default function ProjectDetailScreen() {
       const children = await fileService.listChildren(node.id);
       setFileNodes(children);
       setCurrentFolder({ id: node.id, name: node.name });
+      setBreadcrumbs((prev) => [...prev, { id: node.id, name: node.name }]);
     } catch (e) {
       console.error('Failed to open folder:', e);
+    } finally {
+      setFileLoading(false);
+    }
+  };
+
+  const navigateBreadcrumb = async (index: number) => {
+    try {
+      setFileLoading(true);
+      if (index <= 0) {
+        await loadRootFiles();
+        return;
+      }
+      const target = breadcrumbs[index];
+      if (!target || !target.id) {
+        await loadRootFiles();
+        return;
+      }
+      const children = await fileService.listChildren(target.id);
+      setFileNodes(children);
+      setCurrentFolder({ id: target.id, name: target.name });
+      setBreadcrumbs(breadcrumbs.slice(0, index + 1));
+    } catch (e) {
+      console.error('Failed to navigate breadcrumb:', e);
     } finally {
       setFileLoading(false);
     }
@@ -258,7 +284,23 @@ export default function ProjectDetailScreen() {
   // Load files when opening overlay
   useEffect(() => {
     if (showFilesOverlay) {
-      loadRootFiles();
+      // Re-open in the last visited folder if available; otherwise load root
+      (async () => {
+        try {
+          if (currentFolder?.id) {
+            setFileLoading(true);
+            const children = await fileService.listChildren(currentFolder.id);
+            setFileNodes(children);
+          } else {
+            await loadRootFiles();
+          }
+        } catch (e) {
+          console.error('Failed to refresh folder on reopen:', e);
+          await loadRootFiles();
+        } finally {
+          setFileLoading(false);
+        }
+      })();
     }
   }, [showFilesOverlay, id]);
 
@@ -500,11 +542,13 @@ export default function ProjectDetailScreen() {
         <FilesOverlay
           visible={true}
           currentFolder={currentFolder}
+          breadcrumbs={breadcrumbs}
           fileNodes={fileNodes}
           fileLoading={fileLoading}
           onClose={() => setShowFilesOverlay(false)}
           onLoadRoot={loadRootFiles}
           onOpenFolder={openFolder as any}
+          onNavigateBreadcrumb={navigateBreadcrumb}
           onUpload={uploadIntoCurrent}
           onCreateFolder={() => { setNewFolderName(''); setShowNewFolderModal(true); }}
           onDownload={(node: any) => {
