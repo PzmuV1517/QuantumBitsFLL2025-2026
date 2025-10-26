@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView, TouchableOpacity, Image, Platform, Alert, Modal, TextInput } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import QRCodeView from '../../src/components/common/QRCodeView';
 import { fileService } from '../../src/services/fileService';
+import { useAuth } from '../../src/contexts/AuthContext';
+import { buildManifestFromChildren, ArtefactManifest } from '../../src/utils/artefactManifest';
 
 interface FileNode { id: string; name: string; type: 'file' | 'folder' | 'note'; mime_type?: string; }
 interface ArtefactMeta { id: string; name: string; number: number; previewFileId?: string; createdAt?: string; }
@@ -11,12 +13,16 @@ interface ArtefactMeta { id: string; name: string; number: number; previewFileId
 export default function ArtefactDetail() {
   const { id } = useLocalSearchParams<{ id: string }>(); // folder id
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [children, setChildren] = useState<FileNode[]>([]);
   const [meta, setMeta] = useState<ArtefactMeta | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [confirmName, setConfirmName] = useState('');
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (id) load();
@@ -54,6 +60,11 @@ export default function ArtefactDetail() {
     }
   };
 
+  const onDeleteArtefact = useCallback(() => {
+    setConfirmName('');
+    setShowDeleteModal(true);
+  }, []);
+
   const uploadMoreFiles = async () => {
     const res = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: true, type: '*/*' });
     if (res.canceled) return;
@@ -68,6 +79,38 @@ export default function ArtefactDetail() {
         fd.append('file', { uri: asset.uri, name: asset.name || 'file', type: asset.mimeType || 'application/octet-stream' } as any);
       }
       await fileService.uploadFile(meta?.id || ('' as any), fd);
+    }
+    // After upload, refresh children and update artefact.json manifest
+    try {
+      const ch = await fileService.listChildren(id as string);
+      setChildren(ch);
+      const existingMetaFile = ch.find((c: any) => c.type === 'file' && (c.name === 'artefact.json' || c.name.endsWith('.json')));
+      let existing: Partial<ArtefactManifest> | undefined = undefined;
+      if (existingMetaFile) {
+        try {
+          const res = await fileService.downloadFile(existingMetaFile.id);
+          const text = await (res.data?.text?.() || res.data?.arrayBuffer?.().then((b: any) => new TextDecoder().decode(b)));
+          if (text) existing = JSON.parse(text);
+        } catch {}
+      }
+      const pv = ch.find((c: any) => c.type === 'file' && /^preview\.(png|jpg|jpeg|webp)$/i.test(c.name));
+      const manifest = buildManifestFromChildren(
+        id as string,
+        (existing as any)?.name || meta?.name || 'Artefact',
+        (existing as any)?.number || meta?.number || 0,
+        ch as any,
+        { ...existing, previewFileId: pv?.id },
+        { user: user || undefined, qrUrl: qrUrl || undefined }
+      );
+      if (existingMetaFile && Platform.OS === 'web') {
+        const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
+        const fd = new FormData();
+        const file = new File([blob], 'artefact.json', { type: 'application/json' });
+        fd.append('file', file, 'artefact.json');
+        await fileService.replaceFile(existingMetaFile.id, fd);
+      }
+    } catch (e) {
+      console.error('Failed updating artefact.json after upload', e);
     }
     await load();
   };
@@ -90,6 +133,11 @@ export default function ArtefactDetail() {
           headerBackTitle: 'Project',
           headerShown: true,
           presentation: 'card',
+          headerRight: () => (
+            <TouchableOpacity onPress={onDeleteArtefact} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ color: '#FF4444', fontWeight: '700' }}>Delete</Text>
+            </TouchableOpacity>
+          ),
         }} 
       />
       {loading ? (
@@ -166,6 +214,52 @@ export default function ArtefactDetail() {
           </View>
         </ScrollView>
       )}
+
+      {/* Delete confirmation modal */}
+      <Modal visible={showDeleteModal} transparent animationType="fade" onRequestClose={() => setShowDeleteModal(false)}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Delete artefact</Text>
+            <Text style={styles.modalText}>This will permanently delete this artefact and all its files and notes. Type the artefact name to confirm.</Text>
+            <Text style={[styles.modalText, { marginTop: 8 }]}>
+              Artefact name: <Text style={{ color: '#F5F5F5', fontWeight: '700' }}>{meta?.name || '—'}</Text>
+            </Text>
+            <TextInput
+              value={confirmName}
+              onChangeText={setConfirmName}
+              placeholder="Type the artefact name"
+              placeholderTextColor="#777"
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+              <TouchableOpacity style={[styles.secondaryBtn, { flex: 1 }]} onPress={() => setShowDeleteModal(false)} disabled={deleting}>
+                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteBtn, { flex: 1, opacity: deleting || confirmName !== (meta?.name || '') ? 0.6 : 1 }]}
+                disabled={deleting || confirmName !== (meta?.name || '')}
+                onPress={async () => {
+                  try {
+                    setDeleting(true);
+                    await fileService.deleteNode(id as string);
+                    setShowDeleteModal(false);
+                    router.back();
+                  } catch (e) {
+                    console.error('Failed to delete artefact', e);
+                    Alert.alert('Error', 'Failed to delete artefact');
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+              >
+                <Text style={styles.deleteBtnText}>{deleting ? 'Deleting…' : 'Delete'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -197,6 +291,15 @@ const styles = StyleSheet.create({
   emptyState: { alignItems: 'center', paddingVertical: 24 },
   emptyStateText: { fontSize: 16, fontWeight: '600', color: '#F5F5F5', marginBottom: 4 },
   emptyStateSubtext: { fontSize: 14, color: '#9A9A9A' },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', padding: 16 },
+  modalCard: { width: '100%', maxWidth: 420, backgroundColor: '#111', borderRadius: 12, borderWidth: 1, borderColor: '#2A2A2A', padding: 16 },
+  modalTitle: { color: '#F5F5F5', fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  modalText: { color: '#CFCFCF' },
+  input: { backgroundColor: '#1A1A1A', borderRadius: 10, borderWidth: 1, borderColor: '#2A2A2A', paddingHorizontal: 12, paddingVertical: 10, color: '#F5F5F5', marginTop: 8 },
+  deleteBtn: { backgroundColor: '#3a0f0f', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#5a1a1a', alignItems: 'center' },
+  deleteBtnText: { color: '#FF4444', fontWeight: '700' },
+  secondaryBtn: { backgroundColor: '#222222', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: '#2A2A2A', alignItems: 'center' },
+  secondaryBtnText: { color: '#F5F5F5', fontWeight: '600' },
 });
 
 function downloadDataUrl(dataUrl: string, filename: string) {

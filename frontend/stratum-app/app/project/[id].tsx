@@ -317,7 +317,7 @@ export default function ProjectDetailScreen() {
     const lower = (node.name || '').toLowerCase();
     const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
     const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
-    const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
+    const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json') || node.mime_type === 'application/json';
     if (isCsv || isExcel || isText) {
       let kind = 'csv';
       if (isExcel) kind = 'excel';
@@ -569,7 +569,7 @@ export default function ProjectDetailScreen() {
             const lower = (node.name || '').toLowerCase();
             const isCsv = (node.mime_type === 'text/csv') || lower.endsWith('.csv');
             const isExcel = (node.mime_type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') || (node.mime_type === 'application/vnd.ms-excel') || lower.endsWith('.xlsx') || lower.endsWith('.xls');
-            const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md');
+            const isText = (node.mime_type === 'text/plain') || lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.json') || node.mime_type === 'application/json';
             if (isCsv || isExcel || isText) {
               let kind = 'csv';
               if (isExcel) kind = 'excel';

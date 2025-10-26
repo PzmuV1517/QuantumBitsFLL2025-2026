@@ -131,8 +131,8 @@ export default function DataPreviewScreen() {
           const { blob }: any = await fileService.downloadFileStream(nodeId, token, undefined);
           const ext = (name as string)?.toLowerCase() || '';
           
-          // Handle text files (txt, md)
-            if (ext.endsWith('.txt') || ext.endsWith('.md')) {
+          // Handle text files (txt, md, json)
+            if (ext.endsWith('.txt') || ext.endsWith('.md') || ext.endsWith('.json')) {
             const text = await blob.text();
             setTextContent(text);
             // Markdown preloading now moved into MarkdownView/TextFilePanel
@@ -228,9 +228,10 @@ export default function DataPreviewScreen() {
       let finalFilename = name as string;
       
       // Handle text files
-      if (ext.endsWith('.txt') || ext.endsWith('.md')) {
+      if (ext.endsWith('.txt') || ext.endsWith('.md') || ext.endsWith('.json')) {
         if (!textContent) return;
-        blob = new Blob([textContent], { type: 'text/plain' });
+        const contentType = ext.endsWith('.json') ? 'application/json' : 'text/plain';
+        blob = new Blob([textContent], { type: contentType });
         
         // For note files, check if title changed and update filename
         if (isNoteFile && editableTitle !== originalTitle) {

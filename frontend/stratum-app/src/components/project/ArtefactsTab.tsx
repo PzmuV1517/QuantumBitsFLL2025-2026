@@ -4,12 +4,15 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useRouter } from 'expo-router';
 import { fileService } from '../../services/fileService';
 import QRCodeView from '../common/QRCodeView';
+import { useAuth } from '../../contexts/AuthContext';
+import { buildManifestFromChildren } from '../../utils/artefactManifest';
 
 interface FileNode { id: string; name: string; type: 'file' | 'folder' | 'note'; mime_type?: string; }
 interface ArtefactMeta { id: string; name: string; number: number; previewFileId?: string; createdAt?: string; }
 
 export default function ArtefactsTab({ projectId }: { projectId: string }) {
   const router = useRouter();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [artefactFolder, setArtefactFolder] = useState<FileNode | null>(null);
   const [artefacts, setArtefacts] = useState<Array<{ folder: FileNode; meta: ArtefactMeta | null; previewUrl?: string }>>([]);
@@ -134,10 +137,18 @@ export default function ArtefactsTab({ projectId }: { projectId: string }) {
           noteFileIds.push(up.id || up.file_id || up.node_id || up?.file?.id);
         }
       }
-      // Upload artefact.json
-      const meta: ArtefactMeta = { id: folder.id, name: newName.trim(), number, previewFileId, createdAt: new Date().toISOString() };
+      // Build comprehensive artefact.json from folder children
+      const freshChildren = await fileService.listChildren(folder.id);
+      const manifest = buildManifestFromChildren(
+        folder.id,
+        newName.trim(),
+        number,
+        freshChildren as any,
+        { createdAt: new Date().toISOString(), createdBy: user || undefined, previewFileId },
+        { user: user || undefined, qrUrl: linkForFolder(folder.id) }
+      );
       if (Platform.OS === 'web') {
-        const blob = new Blob([JSON.stringify(meta, null, 2)], { type: 'application/json' });
+        const blob = new Blob([JSON.stringify(manifest, null, 2)], { type: 'application/json' });
         const fd = new FormData();
         fd.append('parent_id', String(folder.id));
         const file = new File([blob], 'artefact.json', { type: 'application/json' });
