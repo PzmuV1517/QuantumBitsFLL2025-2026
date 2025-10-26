@@ -25,6 +25,7 @@ import FilesOverlay from '../../src/components/project/FilesOverlay';
 import ProjectHeader from '../../src/components/project/ProjectHeader';
 import NotesSection from '../../src/components/project/NotesSection';
 import FileGallery from '../../src/components/project/FileGallery';
+import ArtefactsTab from '../../src/components/project/ArtefactsTab';
 import ProjectMenuModal from '../../src/components/project/modals/ProjectMenuModal';
 import NewFolderModal from '../../src/components/project/modals/NewFolderModal';
 import DeleteConfirmModal from '../../src/components/project/modals/DeleteConfirmModal';
@@ -66,7 +67,7 @@ export default function ProjectDetailScreen() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'gallery' | 'notes'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'artefacts' | 'notes'>('gallery');
   const [fileNodes, setFileNodes] = useState<any[]>([]);
   const [currentFolder, setCurrentFolder] = useState<{ id: string | null; name: string } | null>(null);
   const [fileLoading, setFileLoading] = useState(false);
@@ -108,8 +109,9 @@ export default function ProjectDetailScreen() {
   // Sync UI with route param when available
   useEffect(() => {
     const tabParam = (globalParams?.tab as string) || '';
-    if (tabParam === 'notes') setActiveTab('notes');
-    else if (tabParam === 'gallery') setActiveTab('gallery');
+  if (tabParam === 'notes') setActiveTab('notes');
+  else if (tabParam === 'artefacts') setActiveTab('artefacts');
+  else if (tabParam === 'gallery') setActiveTab('gallery');
     else if (tabParam === 'files') setShowFilesOverlay(true);
     else if (tabParam === 'members') setShowMembersModal(true);
   }, [globalParams?.tab]);
@@ -167,7 +169,9 @@ export default function ProjectDetailScreen() {
     try {
       setFileLoading(true);
       const nodes = await fileService.listRoot(id as string);
-      setFileNodes(nodes);
+      // Mark Artefacts folder as locked in UI
+      const decorated = nodes.map((n: any) => (n.type === 'folder' && n.name === 'Artefacts' ? { ...n, is_locked: true } : n));
+      setFileNodes(decorated);
       setCurrentFolder({ id: null as any, name: 'Root' });
     } catch (e) {
       console.error('Failed to load files:', e);
@@ -433,7 +437,7 @@ export default function ProjectDetailScreen() {
         {/* Project Header */}
         <ProjectHeader project={project as any} />
 
-        {/* Tab Navigation: File Gallery + Notes */}
+        {/* Tab Navigation: File Gallery + Artefacts + Notes */}
         <View style={styles.tabContainer}>
           <TouchableOpacity
             style={[styles.tab, activeTab === 'gallery' && styles.activeTab]}
@@ -441,6 +445,14 @@ export default function ProjectDetailScreen() {
           >
             <Text style={[styles.tabText, activeTab === 'gallery' && styles.activeTabText]}>
               File Gallery
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tab, activeTab === 'artefacts' && styles.activeTab]}
+            onPress={() => setActiveTab('artefacts')}
+          >
+            <Text style={[styles.tabText, activeTab === 'artefacts' && styles.activeTabText]}>
+              Artefacts
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
@@ -457,6 +469,8 @@ export default function ProjectDetailScreen() {
         <View style={styles.tabContent}>
           {activeTab === 'gallery' ? (
             <FileGallery projectId={project?.id as string} onOpenItem={openGalleryItem} />
+          ) : activeTab === 'artefacts' ? (
+            <ArtefactsTab projectId={project?.id as string} />
           ) : activeTab === 'notes' ? (
             <NotesSection notes={notes as any} onCreateNote={handleCreateNote} onNotePress={handleNotePress} />
           ) : null}
