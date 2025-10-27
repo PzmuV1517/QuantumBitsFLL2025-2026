@@ -1,135 +1,203 @@
 # STRATUM Project TODO / Roadmap (Living Document)
 
-Retain original quick items at top:
-1. Offline sync (see Mobile & Sync section)
-2. Improve UI (see Frontend UX section)
-3. Add light mode (theme toggle)
+This file uses priority tags and per-task notes to help plan work:
+
+- Priority tags: [P0] critical, [P1] high, [P2] normal, [P3] nice-to-have
+- Every task has a checkbox and an optional Notes field for developers
+- Categories are ordered from most viable/impactful to least
+
+Template for tasks:
+
+- [ ] [P1] Short task title — concise purpose
+	- Notes: …
 
 ---
 
-## 🔄 Data & Sync
-- [ ] Design offline data model (conflict resolution strategy: last-write-wins vs CRDT for notes/projects)
-- [ ] Implement local persistence (Expo SQLite or WatermelonDB)
-- [ ] Background sync queue (retry with exponential backoff)
-- [ ] Delta sync endpoints on backend (ETag / updated_at filtering)
-- [ ] Conflict resolution rules doc
-- [ ] Asset (images / 3D models) lazy sync & placeholder rendering
+## ✅ Recently Completed (last few weeks)
 
-## 🗃 Backend Core
-- [ ] Migrate DB creation from `Base.metadata.create_all` to Alembic migrations
-- [ ] Add unique constraints & indexes (projects.slug, notes.project_id + created_at)
-- [ ] Implement pagination & filtering (projects, notes) with query params
-- [ ] Soft delete for notes/projects (deleted_at column)
-- [ ] Add audit log table (who changed what & when)
-- [ ] Rate limiting (per IP / token) on write-heavy endpoints
-- [ ] Health & readiness endpoints (`/health`, `/ready` including DB & MinIO checks)
-- [ ] Service layer abstraction (decouple routes from ORM logic)
-
-## 🔐 Security & Auth
-- [ ] Token refresh flow (short-lived access, longer-lived refresh)
-- [ ] Cookie based access
-- [ ] Role-based access expansion (field-level permissions for confidential finds)
-- [ ] Add JWT signature rotation mechanism
-- [ ] Secret management (move .env secrets to Docker secrets / Vault for production)
-- [ ] Input validation hardening (length limits, mime type whitelist for uploads)
-- [ ] Add CORS config validation tests
-- [ ] Security headers middleware (Content-Security-Policy, X-Frame-Options)
-
-## 📦 Object Storage / Media
-- [ ] Folder structure convention in MinIO (projects/{id}/notes/{id}/)
-- [ ] File extension detection and adaptation to it (png files show preview of image/lead to a page with just the png file)
-- [ ] Image derivative generation (thumbnail + medium size)
-- [ ] 3D model preview pipeline (convert to glTF if needed)
-- [ ] Checksum verification on upload & store hash in DB
-- [ ] Add signed URL expiration policy (configurable via env)
-
-## 🌐 API Enhancements
-- [ ] OpenAPI tags & descriptions cleanup
-- [ ] Add versioning (prefix /v1; future /v2)
-- [ ] Error response standardization (problem+json schema)
-- [ ] Add search endpoint (projects/notes by keyword, basic full-text) using PostgreSQL tsvector
-- [ ] Bulk operations (batch create notes)
-- [ ] GraphQL read-only explorer (optional)
-
-## 🧪 Testing & Quality
-- [ ] Set up pytest fixtures for temp MinIO & Postgres (testcontainers or local docker)
-- [ ] Unit tests coverage target 70% -> 85%
-- [ ] Integration tests for auth guard paths
-- [ ] Performance baseline (locust / k6 scenario: 100 concurrent note uploads)
-- [ ] Add lint & format pre-commit hooks (black, flake8, isort)
-- [ ] CI pipeline (GitHub Actions) for backend & frontend (lint + test)
-- [ ] Security scanning (pip-audit / bandit)
-
-## 📱 Frontend UX (Expo)
-- [ ] Implement global theme switch (dark/light + system) & persist setting
-- [ ] Improve navigation hierarchy (deep links to specific notes/projects)
-- [ ] Skeleton loaders while fetching projects & notes
-- [ ] Optimistic UI for note create/edit
-- [ ] Error boundary & toast notification system
-- [ ] Accessibility pass (contrast, VoiceOver / TalkBack labels)
-- [ ] Unified form components (input, textarea, file picker) with validation states
-- [ ] Image & 3D asset preview component
-
-## 🗺 Archaeology-Specific Features
-- [ ] GIS / geotagging for finds (lat/long, site code)
-- [ ] Layered stratigraphy visualization component
-- [ ] 3D point cloud viewer integration refinement (potree-core usage audit)
-- [ ] Annotation system on images / point clouds (pin + comment)
-- [ ] Provenance tracking (chain of custody metadata fields)
-- [ ] Controlled vocabulary / taxonomy (artifact types) reference table
-
-## 💾 Data Model Improvements
-- [ ] Add `slug` to Project (human-friendly URLs)
-- [ ] Add `updated_at` triggers (Postgres ON UPDATE) or SQLAlchemy event listener
-- [ ] Separate table for attachments (notes_attachments) vs embedding paths in notes
-- [ ] Tagging system (many-to-many note_tags)
-- [ ] Add `visibility` enum (public, team, restricted)
-
-## ⚙ Dev Experience
-- [ ] Docker Compose setup (postgres, minio, backend, optional pgadmin)
-- [ ] Makefile / task runner (setup, migrate, start)
-- [ ] VS Code recommended extensions settings file
-- [ ] Local seed script (sample projects & notes)
-- [ ] Hot reload for Alembic migrations in dev (script)
-
-## 📊 Observability
-- [ ] Structured logging (JSON) with request IDs
-- [ ] Centralized error handling & Sentry integration (or OpenTelemetry)
-- [ ] Metrics endpoint (Prometheus style; requests/sec, upload durations)
-- [ ] Slow query logging & index suggestions
-
-## 🚀 Deployment / Infra
-- [ ] Containerize backend with multi-stage Dockerfile
-- [ ] CI build & push images
-- [ ] Staging environment with seed data
-- [ ] Infrastructure as Code sketch (Terraform modules outline)
-- [ ] HTTPS & reverse proxy (Traefik or Nginx) config docs
-- [ ] Backup strategy (daily pg_dump + MinIO snapshots)
-
-## 🔄 Migrations from current state
-- [ ] Replace direct metadata create_all with Alembic revision baseline
-- [ ] Introduce indexing migration
-- [ ] Data backfill script for any new columns (e.g., slug, visibility)
-
-## 🧯 Risk / Tech Debt Items
-- [ ] Python 3.14 compatibility warning (pin to 3.12 in runtime until upstream stable)
-- [ ] Secrets rotation process doc
-- [ ] MinIO credentials currently default (improve for production)
-- [ ] Missing retry logic on MinIO upload failures
-
-## 📄 Documentation
-- [ ] Architecture overview diagram
-- [ ] Data flow for asset upload
-- [ ] Sync conflict resolution guide
-- [ ] Contribution guide (coding standards, branching, commit messages)
-- [ ] API usage examples (curl + JS + Python)
-
-## ✅ Immediate Next High-Impact (Top 5)
-1. Docker Compose environment (accelerates all dev)
-2. Alembic baseline & remove create_all bootstrap
-3. Theme toggle (completes original TODO item #3)
-4. Offline data model decision document
-5. Structured logging + request IDs for debugging
+- [x] Web PDF preview in data-preview via Chromium iframe ([`PdfPanel.web`](frontend/stratum-app/src/components/data/PdfPanel.web.tsx), [`data-preview`](frontend/stratum-app/app/data-preview.tsx)); Edit/Save hidden for PDFs
+	- Notes: Routed from Files overlay and Gallery; object URL lifecycle handled on unmount
+- [x] Files UX: red-styled Download/Move and red "\root" header link ([`app/project/[id].tsx`](frontend/stratum-app/app/project/%5Bid%5D.tsx), [`FilesOverlay`](frontend/stratum-app/src/components/project/FilesOverlay.tsx))
+	- Notes: Aligns with LOCKED badge styling
+- [x] Move safety: 409 conflict on duplicate sibling names; client alert ([`backend/app/routes/files.py`](backend/app/routes/files.py))
+- [x] Gallery: PDF icon and routing to data-preview ([`FileGallery.tsx`](frontend/stratum-app/src/components/project/FileGallery.tsx))
+- [x] Markdown preview upgrades (math/HTML via [`MarkdownView`](frontend/stratum-app/src/components/common/MarkdownView.tsx))
+- [x] Artefact creation flow: folder, image uploads, note uploads, QR generation, artefact.json manifest ([`ArtefactsTab.tsx`](frontend/stratum-app/src/components/project/ArtefactsTab.tsx))
+- [x] Data-preview panels for CSV/Excel/Text/Markdown
+- [x] Fix JSX fragment bug in project screen file rows
 
 ---
-Legend: [ ] not started / [x] done. Keep this file updated as tasks progress.
+
+## P0 — Immediate, High-Impact
+
+### Dev Environment & Core
+
+- [ ] [P0] Docker Compose environment (Postgres, MinIO, backend, optional pgAdmin)
+	- Notes: One-command spin-up for onboarding and CI reproducibility
+- [ ] [P0] Alembic baseline & remove create_all bootstrap
+	- Notes: Create initial revision from current schema; document migration workflow
+- [ ] [P0] CI pipeline (GitHub Actions) for backend & frontend (lint + test)
+	- Notes: Reuse Testing & Quality checklist below
+
+### Files & Gallery
+
+- [ ] [P0] Multi-select in FilesOverlay (bulk move/delete/download)
+	- Notes: Keyboard modifiers on web; long-press on mobile; server batch endpoints
+- [ ] [P1] File search/filter within current folder
+	- Notes: Client-side first; server-side query params later
+- [ ] [P1] Persist breadcrumbs and last-opened folder across sessions
+	- Notes: AsyncStorage key per project
+- [ ] [P1] Thumbnails for images (server derivative pipeline)
+	- Notes: Generate on upload with background job; store sizes in DB
+- [ ] [P2] Drag & drop upload (web)
+	- Notes: Overlay drop zone + hover feedback
+
+### Data Preview
+
+- [ ] [P0] JSON viewer with collapsible tree
+	- Notes: Web-only first with lightweight viewer; native later
+- [ ] [P1] Native PDF viewing fallback (WebView or open-in external)
+	- Notes: Use `react-native-webview` or share intent if blocked
+- [ ] [P2] Column type inference/formatting for CSV (numbers, dates)
+	- Notes: Guard performance on large files
+
+### UX & Feedback
+
+- [ ] [P1] Toast notifications for success/error (non-blocking)
+	- Notes: Reusable hook; respect platform
+- [ ] [P1] Skeleton loaders (projects, notes, files)
+	- Notes: Match STRATUM theme
+- [ ] [P2] Global theme switch (dark/light + system) & persist setting
+	- Notes: Keep dark as default
+
+---
+
+## P1 — Next Sprint Candidates
+
+### Backend Core
+
+- [ ] [P1] Pagination & filtering for file listings
+	- Notes: Cursor-based to support large folders
+- [ ] [P1] Health & readiness endpoints (`/health`, `/ready`)
+	- Notes: Include DB and MinIO checks
+- [ ] [P1] Service layer abstraction (decouple routes from ORM logic)
+	- Notes: Improves testability
+
+### Security & Auth
+
+- [ ] [P1] Token refresh flow (short-lived access, longer-lived refresh)
+	- Notes: Keep mobile/token storage best practices
+- [ ] [P1] Security headers middleware (CSP, X-Frame-Options)
+	- Notes: Web-only; document CSP for blob/object URLs
+
+### Notes & Artefacts
+
+- [ ] [P1] Markdown editor toolbar (bold/italic/code/headers)
+	- Notes: Non-invasive toolbar for TextFilePanel
+- [ ] [P1] Edit artefact metadata UI (name, number, previewFileId)
+	- Notes: Write back to artefact.json manifest
+
+---
+
+## P2 — Roadmap / Enhancements
+
+### Data & Sync
+
+- [ ] [P2] Design offline data model (LWW vs CRDT)
+	- Notes: Begin with notes/files metadata
+- [ ] [P2] Local persistence (Expo SQLite or WatermelonDB)
+	- Notes: Abstraction layer to mirror API
+- [ ] [P2] Background sync queue (retry with backoff)
+	- Notes: Tag per project
+- [ ] [P2] Delta sync endpoints on backend (ETag / updated_at filtering)
+	- Notes: Work with pagination design
+
+### API & Media
+
+- [ ] [P2] OpenAPI tags/descriptions cleanup
+	- Notes: Group by domain (auth, projects, files)
+- [ ] [P2] Signed URL expiration policy (env-configurable)
+	- Notes: Short-lived; refresh flow in UI
+- [ ] [P2] Image derivative generation (thumbnail + medium) — server jobs
+	- Notes: Shared with P1 thumbnails task
+
+### Observability & Perf
+
+- [ ] [P2] Structured logging (JSON) with request IDs
+	- Notes: Correlate UI actions to backend
+- [ ] [P2] Metrics endpoint (Prometheus)
+	- Notes: Requests/sec, upload durations
+- [ ] [P2] Virtualize large file lists and galleries
+	- Notes: react-window/react-virtualized; avoid layout thrash
+
+---
+
+## P3 — Nice-to-have / Longer-term
+
+- [ ] [P3] GIS / geotagging for finds
+	- Notes: Map display and site code annotations
+- [ ] [P3] Stratigraphy visualization component
+	- Notes: Requires domain modeling work
+- [ ] [P3] 3D point cloud viewer integration refinement
+	- Notes: Audit potree-core usage
+- [ ] [P3] Annotation system on images/point clouds
+	- Notes: Pins + comments; versioning later
+
+---
+
+## File Gallery: Implementation Tasks
+
+- [x] [P1] Grid/List toggle (icons on web)
+	- Notes: `react-icons` web-only dynamic imports
+- [x] [P1] Day/Week/Month grouping and sorting stability
+	- Notes: Use persisted timestamps; avoid Date.now for grouping
+- [x] [P1] PDF recognition and routing to data-preview
+	- Notes: Keep Edit/Save hidden for PDFs
+- [ ] [P1] Search/filter by name and type
+	- Notes: Client-only with debounce; server later
+- [ ] [P2] Improve icons per filetype (CSV, Excel, Markdown, PDF)
+	- Notes: Keep emoji fallback for native
+- [ ] [P2] Performance pass for large galleries
+	- Notes: Measure and virtualize if needed
+
+---
+
+## Reference: Quality & Workflow (from Roadmap)
+
+### Code Quality Checklist
+
+- [ ] Small, focused functions; meaningful names
+- [ ] Comments for complex logic
+- [ ] Consistent style (Black/Flake8/Isort or ESLint/Prettier)
+- [ ] Meaningful commit messages
+- [ ] Add/update API docs for endpoints changed
+
+### Testing Checklist
+
+- [ ] Code runs without errors
+- [ ] No console warnings
+- [ ] Tested on iOS/Android/Web as applicable
+- [ ] API endpoints verified
+- [ ] Error handling paths exercised
+- [ ] Loading/skeleton states visible
+- [ ] Component tests (panels/overlays)
+- [ ] Integration tests (file move/rename flows)
+- [ ] E2E smoke: open project → upload → preview CSV → preview PDF
+
+### Git Workflow (commands)
+
+```bash
+# Create a feature branch
+git checkout -b feature/file-gallery-improvements
+
+# Stage & commit changes
+git add .
+git commit -m "feat(files): add gallery search and grid/list toggle"
+
+# Push and open PR
+git push origin feature/file-gallery-improvements
+```
+
+---
+
+Legend: [ ] not started / [x] done. Use Notes lines to track context or decisions.

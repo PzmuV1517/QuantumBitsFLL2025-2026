@@ -103,10 +103,33 @@ QuantumBitsFLL2025-2026/
 - Upload photos to notes
 - Link notes to projects
 
-### 5. Data Syncing 🚧
-- Local storage with AsyncStorage
-- Cloud backup to PostgreSQL
-- Conflict resolution (coming soon)
+### 5. Files & Previews ✅
+- File tree with folders and breadcrumbs
+- Upload and download files
+- Move files with conflict detection (HTTP 409) and UI feedback
+- Previews:
+  - CSV (table) and Excel (grid) via data-preview
+  - Text and Markdown (with KaTeX) via [`MarkdownView`](frontend/stratum-app/src/components/common/MarkdownView.tsx)
+  - Images
+  - PDF (Web only, view-only) via [`PdfPanel.web`](frontend/stratum-app/src/components/data/PdfPanel.web.tsx) in [`data-preview`](frontend/stratum-app/app/data-preview.tsx)
+
+### 6. File Gallery ✅
+
+- Unified gallery across the project with two views: Grid and List
+- Time-based grouping: Day, Week, Month
+- File-type aware icons and quick open actions
+- Deep-link routing to specialized preview screens (image-preview, data-preview)
+- PDF files route to data-preview and open inline (Chromium, view-only)
+- Source: [`FileGallery.tsx`](frontend/stratum-app/src/components/project/FileGallery.tsx) and integration in [`app/project/[id].tsx`](frontend/stratum-app/app/project/%5Bid%5D.tsx)
+
+### 7. UX & UI Improvements ✅
+
+- Consistent STRATUM dark theme with better contrast
+- Files overlay with breadcrumbs, locked folders, and action rows (download/move)
+- Safer moves with backend conflict detection surfaced to the user
+- Markdown rendering with math (KaTeX) and sanitized HTML
+- Autofill-safe inputs styling on web
+- Password show/hide toggles in auth screens
 
 ---
 
@@ -289,6 +312,17 @@ Visit http://localhost:8000/docs for interactive API documentation.
 - [ ] **Phase 2**: Site Planning (GPS, Tasks, Artifacts)
 - [ ] **Phase 3**: Expedition & AI (LiDAR, AI summaries)
 - [ ] **Phase 4**: Professional Features (Cloud, Advanced collaboration)
+
+---
+
+## 🆕 What’s New (Last Few Weeks)
+
+- Web PDF preview in data-preview (view-only; Edit/Save hidden) using [`frontend/stratum-app/src/components/data/PdfPanel.web.tsx`](frontend/stratum-app/src/components/data/PdfPanel.web.tsx) and [`frontend/stratum-app/app/data-preview.tsx`](frontend/stratum-app/app/data-preview.tsx)
+- Files UX polish: red-styled Download/Move actions and red “\root” header link in [`frontend/stratum-app/app/project/[id].tsx`](frontend/stratum-app/app/project/%5Bid%5D.tsx) and [`frontend/stratum-app/src/components/project/FilesOverlay.tsx`](frontend/stratum-app/src/components/project/FilesOverlay.tsx)
+- Safer moves: backend returns 409 on name collisions in [`app.routes.files.move_node`](backend/app/routes/files.py); surfaced as alerts in UI
+- Artefacts: QR generation + artefact.json manifest builder in [`frontend/stratum-app/src/components/project/ArtefactsTab.tsx`](frontend/stratum-app/src/components/project/ArtefactsTab.tsx); uploads images/notes and updates manifest
+- Markdown rendering upgraded with math and raw HTML support via [`MarkdownView`](frontend/stratum-app/src/components/common/MarkdownView.tsx)
+- Gallery: PDF recognized (📑) and routed to data-preview in [`frontend/stratum-app/src/components/project/FileGallery.tsx`](frontend/stratum-app/src/components/project/FileGallery.tsx)
 
 ---
 
