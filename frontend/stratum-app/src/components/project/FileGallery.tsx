@@ -226,7 +226,8 @@ function iconFor(node: FileNode) {
   if (node.type === 'note') return '📝';
   if (lower.endsWith('.csv')) return '📊';
   if (lower.endsWith('.xlsx') || lower.endsWith('.xls')) return '📈';
-  if (lower.endsWith('.md') || lower.endsWith('.txt') || lower.endsWith('.pdf')) return '📄';
+  if (lower.endsWith('.md') || lower.endsWith('.txt')) return '📄';
+  if (lower.endsWith('.pdf')) return '📑';
   return '📁';
 }
 
