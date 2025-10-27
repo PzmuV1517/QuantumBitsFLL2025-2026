@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import TextFilePanel from '../src/components/data/TextFilePanel';
 import CsvPanel from '../src/components/data/CsvPanel';
 import ExcelPanel from '../src/components/data/ExcelPanel';
-import PdfPanel from '../src/components/data/PdfPanel';
+import PdfPanel from '../src/components/data/PdfPanel.web';
 
 // Lazy import to avoid native bundling issues
 let Papa: any = null;
