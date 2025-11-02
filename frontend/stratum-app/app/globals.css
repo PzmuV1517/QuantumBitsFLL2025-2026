@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html, body, #root {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+/* Hide scrollbars on web while keeping scrolling functional */
+/* Firefox */
+html { scrollbar-width: none; }
+/* IE 10+ and old Edge */
+body { -ms-overflow-style: none; }
+/* Chrome, Safari, Opera */
+body::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
+body::-webkit-scrollbar-thumb { background: transparent; }
+
+/* Smooth fonts on dark bg */
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* StarBorder uses its own CSS from components/StarBorder.css; no global overrides needed here. */
